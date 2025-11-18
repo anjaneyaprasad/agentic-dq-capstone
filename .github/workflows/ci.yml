@@ -23,7 +23,13 @@ jobs:
           cache: sbt
 
       # -------------------------
-      # Install Python + Dependencies
+      # Install sbt
+      # -------------------------
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      # -------------------------
+      # Set up Python
       # -------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -33,20 +39,20 @@ jobs:
       - name: Install Python Requirements
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
 
       # -------------------------
-      # Python Code Checks
+      # Python Code Checks (optional / soft)
       # -------------------------
       - name: Run Python Format Check (Black)
         run: |
-          pip install black
-          black --check . || true  # don't fail early yet
+          python -m pip install black
+          black --check . || true  # don't fail the build yet
 
       - name: Run Python Linting (flake8)
         run: |
-          pip install flake8
-          flake8 scripts || true  # allow warnings for now
+          python -m pip install flake8
+          if [ -d scripts ]; then flake8 scripts || true; fi
 
       # -------------------------
       # Scala / sbt Build & Test
@@ -63,13 +69,20 @@ jobs:
       - name: Generate Sample Data
         run: |
           mkdir -p data
-          python scripts/synthesize_data.py --rows 1000 --with-issues --with-anomalies
+          if [ -f scripts/synthesize_data.py ]; then \
+            python scripts/synthesize_data.py --rows 1000 --with-issues --with-anomalies; \
+          else \
+            echo "synthesize_data.py not found, skipping generation"; \
+          fi
 
       # -------------------------
       # Optional Artifact Upload
       # -------------------------
       - name: Upload Generated Sample Data
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: synthetic-data-sample
           path: data/*.csv
+          if-no-files-found: ignore
+
