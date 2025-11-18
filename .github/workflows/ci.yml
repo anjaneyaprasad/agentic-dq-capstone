@@ -54,6 +54,14 @@ jobs:
           python -m pip install flake8
           if [ -d scripts ]; then flake8 scripts || true; fi
 
+
+      # -------------------------------
+      # load constraints
+      # -------------------------------
+      - name: Export Deequ Rules JSON
+        run: |
+          python -m dq_rules.loader
+
       # -------------------------
       # Scala / sbt Build & Test
       # -------------------------

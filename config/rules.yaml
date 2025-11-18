@@ -1,0 +1,120 @@
+version: 1
+default_severity: warning
+
+tables:
+  - name: dim_customers
+    criticality: medium
+    rules:
+      - id: dim_customers_pk_unique
+        column: customer_id
+        check: unique
+        severity: error
+
+      - id: dim_customers_email_not_null
+        column: email
+        check: not_null
+        severity: error
+
+      - id: dim_customers_country_in_set
+        column: country
+        check: in_set
+        allowed_values: ["IN", "US", "UK", "DE", "FR", "SG"]
+        severity: warning
+
+  - name: dim_products
+    criticality: medium
+    rules:
+      - id: dim_products_pk_unique
+        column: product_id
+        check: unique
+        severity: error
+
+      - id: dim_products_category_not_null
+        column: category
+        check: not_null
+        severity: error
+
+      - id: dim_products_base_price_non_negative
+        column: base_price
+        check: greater_or_equal
+        threshold: 0
+        severity: error
+
+  - name: dim_stores
+    criticality: low
+    rules:
+      - id: dim_stores_pk_unique
+        column: store_id
+        check: unique
+        severity: error
+
+      - id: dim_stores_region_not_null
+        column: region
+        check: not_null
+        severity: warning
+
+  - name: fact_sales
+    criticality: critical
+    rules:
+      - id: fact_sales_pk_unique
+        column: sale_id
+        check: unique
+        severity: error
+
+      - id: fact_sales_customer_not_null
+        column: customer_id
+        check: not_null
+        severity: error
+
+      - id: fact_sales_product_not_null
+        column: product_id
+        check: not_null
+        severity: error
+
+      - id: fact_sales_store_not_null
+        column: store_id
+        check: not_null
+        severity: error
+
+      - id: fact_sales_quantity_non_negative
+        column: quantity
+        check: greater_or_equal
+        threshold: 0
+        severity: error
+
+      - id: fact_sales_total_amount_non_negative
+        column: total_amount
+        check: greater_or_equal
+        threshold: 0
+        severity: error
+
+      - id: fact_sales_payment_method_in_set
+        column: payment_method
+        check: in_set
+        allowed_values: ["CARD", "UPI", "CASH", "WALLET"]
+        severity: warning
+
+      - id: fact_sales_status_in_set
+        column: status
+        check: in_set
+        allowed_values: ["SUCCESS", "PENDING", "FAILED"]
+        severity: warning
+
+    foreign_keys:
+      - id: fk_fact_sales_customer
+        local_column: customer_id
+        referenced_table: dim_customers
+        referenced_column: customer_id
+        severity: error
+
+      - id: fk_fact_sales_product
+        local_column: product_id
+        referenced_table: dim_products
+        referenced_column: product_id
+        severity: error
+
+      - id: fk_fact_sales_store
+        local_column: store_id
+        referenced_table: dim_stores
+        referenced_column: store_id
+        severity: error
