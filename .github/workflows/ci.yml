@@ -1,0 +1,75 @@
+name: CI Pipeline
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # -------------------------
+      # Setup JDK for Spark + Scala
+      # -------------------------
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: sbt
+
+      # -------------------------
+      # Install Python + Dependencies
+      # -------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Requirements
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # -------------------------
+      # Python Code Checks
+      # -------------------------
+      - name: Run Python Format Check (Black)
+        run: |
+          pip install black
+          black --check . || true  # don't fail early yet
+
+      - name: Run Python Linting (flake8)
+        run: |
+          pip install flake8
+          flake8 scripts || true  # allow warnings for now
+
+      # -------------------------
+      # Scala / sbt Build & Test
+      # -------------------------
+      - name: sbt compile
+        run: sbt compile
+
+      - name: Run sbt tests
+        run: sbt test
+
+      # -------------------------
+      # Smoke Test: Run Synthetic Data Generator
+      # -------------------------
+      - name: Generate Sample Data
+        run: |
+          mkdir -p data
+          python scripts/synthesize_data.py --rows 1000 --with-issues --with-anomalies
+
+      # -------------------------
+      # Optional Artifact Upload
+      # -------------------------
+      - name: Upload Generated Sample Data
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-data-sample
+          path: data/*.csv

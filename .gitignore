@@ -1,0 +1,48 @@
+############################################
+#   PYTHON
+############################################
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.ipynb_checkpoints
+.env
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+############################################
+#   PYTHON DATA / GENERATED FILES
+############################################
+data/*.csv
+data/*.json
+data/*.parquet
+data/*.tsv
+data/*.xlsx
+data/*.gz
+
+# DO NOT ignore the folder itself
+!data/.keep
+
+############################################
+#   SPARK / SBT / SCALA
+############################################
+target/
+project/target/
+project/project/
+
+# Coursier cache
+.coursier/
+
+# Metals / Bloop / IntelliJ Scala support
+.metals/
+.bloop/
+.bsp/
+
+############################################
+#   IDE / EDITOR FILES
+##############################
+

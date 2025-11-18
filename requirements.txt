@@ -1,0 +1,25 @@
+# LLM + Agentic stack
+langchain>=0.3.0
+langgraph>=0.2.0
+openai>=1.50.0
+
+# Web / API / UI
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+streamlit>=1.39.0
+
+# Config / modeling
+pydantic>=2.5.0
+PyYAML>=6.0.0
+python-dotenv>=1.0.1
+
+# Reporting & visuals
+Jinja2>=3.1.0
+plotly>=5.24.0
+
+# Data / Spark helper
+pandas>=2.0.0
+pyspark>=3.5.0
+
+# AWS / cloud integration
+boto3>=1.35.0
