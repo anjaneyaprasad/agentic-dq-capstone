@@ -58,10 +58,14 @@ jobs:
       # Scala / sbt Build & Test
       # -------------------------
       - name: sbt compile
-        run: sbt compile
+        run: |
+          cd dq-spark-project
+          sbt compile
 
       - name: Run sbt tests
-        run: sbt test
+        run: |
+          cd dq-spark-project
+          sbt test
 
       # -------------------------
       # Smoke Test: Run Synthetic Data Generator
