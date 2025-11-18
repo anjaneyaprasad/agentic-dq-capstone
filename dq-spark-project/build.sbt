@@ -13,7 +13,7 @@ lazy val root = (project in file("."))
 
       // Deequ for data quality checks
       "com.amazon.deequ" % "deequ" % "2.0.7-spark-3.5",
-
+      "org.scalatest"   %% "scalatest"  % "3.2.18" % Test
       // (Optional but useful) Logging
       // "org.slf4j" % "slf4j-simple" % "2.0.9"
     ),
