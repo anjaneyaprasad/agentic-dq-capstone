@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DQ Report - sales_fact_daily - 2025-11-19 11:51:40.640888</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; }
+        .status-pass { color: #198754; font-weight: 600; }
+        .status-fail { color: #dc3545; font-weight: 600; }
+        .badge-metric { font-size: 0.8rem; }
+        .section-title { margin-top: 2rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <h2>Data Quality Report</h2>
+    <p class="text-muted">
+        Dataset: <strong>sales_fact_daily</strong><br>
+        Run timestamp: <strong>2025-11-19 11:51:40.640888</strong>
+    </p>
+
+    <hr>
+
+    <!-- Summary section -->
+    <h4 class="section-title">Summary</h4>
+    <ul>
+        <li>Total constraints evaluated: 8</li>
+        <li>Passed: <span class="status-pass">6</span></li>
+        <li>Failed: <span class="status-fail">2</span></li>
+    </ul>
+
+    <!-- Profiling metrics -->
+    <h4 class="section-title">Profiling Metrics</h4>
+    <table class="table table-sm table-striped table-bordered">
+        <thead class="table-light">
+        <tr>
+            <th>Entity</th>
+            <th>Metric</th>
+            <th>Instance (Column)</th>
+            <th>Value</th>
+        </tr>
+        </thead>
+        <tbody>
+        
+            <tr>
+                <td>Column</td>
+                <td>ApproxCountDistinct</td>
+                <td>order_id</td>
+                <td>3.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>ApproxCountDistinct</td>
+                <td>currency</td>
+                <td>3.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>ApproxCountDistinct</td>
+                <td>net_amount</td>
+                <td>3.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>Mean</td>
+                <td>net_amount</td>
+                <td>96.83333333333333</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>StandardDeviation</td>
+                <td>net_amount</td>
+                <td>85.77133683359624</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>Completeness</td>
+                <td>customer_id</td>
+                <td>1.0</td>
+            </tr>
+        
+            <tr>
+                <td>Dataset</td>
+                <td>Size</td>
+                <td>*</td>
+                <td>3.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>ApproxCountDistinct</td>
+                <td>customer_id</td>
+                <td>3.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>Completeness</td>
+                <td>order_id</td>
+                <td>1.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>Completeness</td>
+                <td>currency</td>
+                <td>1.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>Completeness</td>
+                <td>net_amount</td>
+                <td>1.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>Minimum</td>
+                <td>net_amount</td>
+                <td>-10.0</td>
+            </tr>
+        
+            <tr>
+                <td>Column</td>
+                <td>Maximum</td>
+                <td>net_amount</td>
+                <td>200.0</td>
+            </tr>
+        
+        </tbody>
+    </table>
+
+    <!-- Constraint results -->
+    <h4 class="section-title">Constraint Results</h4>
+    <table class="table table-sm table-bordered">
+        <thead class="table-light">
+        <tr>
+            <th>Check</th>
+            <th>Level</th>
+            <th>Constraint</th>
+            <th>Status</th>
+            <th>Message</th>
+        </tr>
+        </thead>
+        <tbody>
+        
+            <tr>
+                <td>sales_fact_daily-ERROR-constraints</td>
+                <td>Error</td>
+                <td>CompletenessConstraint(Completeness(order_id,None,None))</td>
+                <td>
+                    
+                        <span class="status-pass">Success</span>
+                    
+                </td>
+                <td></td>
+            </tr>
+        
+            <tr>
+                <td>sales_fact_daily-ERROR-constraints</td>
+                <td>Error</td>
+                <td>CompletenessConstraint(Completeness(customer_id,None,None))</td>
+                <td>
+                    
+                        <span class="status-pass">Success</span>
+                    
+                </td>
+                <td></td>
+            </tr>
+        
+            <tr>
+                <td>sales_fact_daily-ERROR-constraints</td>
+                <td>Error</td>
+                <td>ComplianceConstraint(Compliance(currency contained in INR,USD,EUR,`currency` IS NULL OR `currency` IN (&#39;INR&#39;,&#39;USD&#39;,&#39;EUR&#39;),None,List(currency),None))</td>
+                <td>
+                    
+                        <span class="status-pass">Success</span>
+                    
+                </td>
+                <td></td>
+            </tr>
+        
+            <tr>
+                <td>sales_fact_daily-ERROR-constraints</td>
+                <td>Error</td>
+                <td>ComplianceConstraint(Compliance(net_amount is non-negative,COALESCE(CAST(net_amount AS DECIMAL(20,10)), 0.0) &gt;= 0,None,List(net_amount),None))</td>
+                <td>
+                    
+                        <span class="status-fail">Failure</span>
+                    
+                </td>
+                <td>Value: 0.6666666666666666 does not meet the constraint requirement!</td>
+            </tr>
+        
+            <tr>
+                <td>sales_fact_daily-ERROR-constraints</td>
+                <td>Error</td>
+                <td>UniquenessConstraint(Uniqueness(List(order_id),None,None))</td>
+                <td>
+                    
+                        <span class="status-pass">Success</span>
+                    
+                </td>
+                <td></td>
+            </tr>
+        
+            <tr>
+                <td>sales_fact_daily-ERROR-constraints</td>
+                <td>Error</td>
+                <td>SizeConstraint(Size(None))</td>
+                <td>
+                    
+                        <span class="status-pass">Success</span>
+                    
+                </td>
+                <td></td>
+            </tr>
+        
+            <tr>
+                <td>sales_fact_daily-WARN-constraints</td>
+                <td>Warning</td>
+                <td>MinimumConstraint(Minimum(net_amount,None,None))</td>
+                <td>
+                    
+                        <span class="status-fail">Failure</span>
+                    
+                </td>
+                <td>Value: -10.0 does not meet the constraint requirement!</td>
+            </tr>
+        
+            <tr>
+                <td>sales_fact_daily-WARN-constraints</td>
+                <td>Warning</td>
+                <td>MaximumConstraint(Maximum(net_amount,None,None))</td>
+                <td>
+                    
+                        <span class="status-pass">Success</span>
+                    
+                </td>
+                <td></td>
+            </tr>
+        
+        </tbody>
+    </table>
+
+</div>
+</body>
+</html>

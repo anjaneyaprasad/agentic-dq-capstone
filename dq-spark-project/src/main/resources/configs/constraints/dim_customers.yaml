@@ -1,0 +1,25 @@
+dataset: dim_customer
+
+constraints:
+  - type: completeness
+    column: customer_id
+    level: ERROR
+
+  - type: unique
+    column: customer_id
+    level: ERROR
+
+  - type: completeness_threshold
+    column: customer_name
+    threshold: 0.999
+    level: WARN
+
+  - type: completeness_threshold
+    column: country
+    threshold: 0.99
+    level: WARN
+
+  - type: size_greater_than
+    column: ""
+    threshold: 10
+    level: WARN

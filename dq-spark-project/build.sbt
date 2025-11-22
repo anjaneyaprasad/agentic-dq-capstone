@@ -1,27 +1,33 @@
 ThisBuild / scalaVersion := "2.12.18"
-ThisBuild / organization := "com.anjaneya"
-ThisBuild / version      := "0.1.0-SNAPSHOT"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "dq-spark-deequ-project",
+    name := "dq-spark-project",
+    version := "0.1.0",
+    logLevel := Level.Info,
 
     libraryDependencies ++= Seq(
-      // Spark core + SQL
-      "org.apache.spark" %% "spark-core" % "3.5.1",
-      "org.apache.spark" %% "spark-sql"  % "3.5.1",
+      // Spark Libraries
+      "org.apache.spark" %% "spark-core" % "3.5.1" % "provided",
+      "org.apache.spark" %% "spark-sql"  % "3.5.1" % "provided",
 
-      // Deequ for data quality checks
+      // Deequ compatible with Spark 3.5.x
       "com.amazon.deequ" % "deequ" % "2.0.7-spark-3.5",
-      "org.scalatest"   %% "scalatest"  % "3.2.18" % Test
-      // (Optional but useful) Logging
-      // "org.slf4j" % "slf4j-simple" % "2.0.9"
+
+      // Config and YAML parsing
+      "com.typesafe" % "config" % "1.4.3",
+      "org.yaml" % "snakeyaml" % "2.2",
+
+      // Logging
+      "org.slf4j" % "slf4j-api" % "2.0.9",
+      "ch.qos.logback" % "logback-classic" % "1.5.6" % Runtime,
+
+      // Test Framework
+      "org.scalatest" %% "scalatest" % "3.2.18" % Test
     ),
 
-    // Needed when running Spark from sbt
-    fork := true,
-    javaOptions ++= Seq(
-      "-Xms1G",
-      "-Xmx4G"
+    // Avoid dependency conflicts with old Hadoop versions
+    dependencyOverrides ++= Seq(
+      "com.google.protobuf" % "protobuf-java" % "3.25.5"
     )
   )
