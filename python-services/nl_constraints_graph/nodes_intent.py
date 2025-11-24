@@ -10,6 +10,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 from .llm_client import get_llm
 from .models import GraphState, RuleSpec
 from .rules_memory import load_recent_examples
+from .profiling_utils import load_latest_profile
 
 
 class RulesList(BaseModel):
@@ -69,6 +70,22 @@ def intent_node(state: GraphState) -> GraphState:
     print("=== FEW-SHOT EXAMPLES USED ===")
     print(examples_text)
     print("=== END EXAMPLES ===")
+    
+    profile = load_latest_profile(state.request.dataset)
+    if profile is None:
+        profile_text = "No recent profiling metrics available."
+    else:
+        # Build a compact text summary
+        lines = []
+        for col, m in profile.items():
+            comp = m.get("completeness")
+            distinct = m.get("approxDistinctness") or m.get("distinct")  # adapt to your metric names
+            minv = m.get("min")
+            maxv = m.get("max")
+            lines.append(
+                f"- {col}: completeness={comp}, distinct={distinct}, min={minv}, max={maxv}"
+            )
+            profile_text = "\n".join(lines)
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -86,6 +103,8 @@ def intent_node(state: GraphState) -> GraphState:
                 (
                     "Dataset: {dataset}\n"
                     "Columns: {columns}\n\n"
+                    "Recent profiling metrics (per column):\n"
+                    "{profile}\n\n"
                     "Previous good examples for this dataset (if any):\n"
                     "{examples}\n\n"
                     "New instruction:\n{instruction}\n\n"
@@ -120,6 +139,7 @@ def intent_node(state: GraphState) -> GraphState:
                 "columns": ", ".join(state.columns),
                 "instruction": state.request.prompt,
                 "examples": examples_text,
+                "profile": profile_text,
                 "format_instructions": format_instructions,
             }
         )

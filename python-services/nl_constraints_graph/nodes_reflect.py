@@ -30,6 +30,8 @@ def reflection_node(state: GraphState) -> GraphState:
 
     llm = get_llm()
     parser = PydanticOutputParser(pydantic_object=RulesList)
+    
+    anomaly_text = "\n".join(state.anomaly_messages) if state.anomaly_messages else "None"
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -42,10 +44,13 @@ def reflection_node(state: GraphState) -> GraphState:
                     "- The user's original instruction\n"
                     "- Previously inferred rules\n"
                     "- Validation error messages\n"
+                    "- Anomaly messages from recent profiling runs\n"
                     "- Optional user feedback\n\n"
-                    "Your task is to CORRECT the rules so they are valid and sensible "
-                    "for a Deequ-like data quality engine.\n"
-                    "Return ONLY JSON that matches the provided schema."
+                    "Your job is to refine or soften the rules so that they:\n"
+                    "- Align with the user's intent\n"
+                    "- Do not contradict the observed data/profile\n"
+                    "- Reduce false positives while still enforcing good data quality.\n"
+                    "Return only a JSON object matching the RulesList schema."
                 ),
             ),
             (
@@ -56,6 +61,7 @@ def reflection_node(state: GraphState) -> GraphState:
                     "Original instruction:\n{instruction}\n\n"
                     "Previous rules (JSON):\n{rules_json}\n\n"
                     "Validation errors:\n{validation_errors}\n\n"
+                    "Anomaly messages:\n{anomalies}\n\n"
                     "User feedback (may be empty):\n{user_feedback}\n\n"
                     "{format_instructions}"
                 ),
@@ -77,6 +83,7 @@ def reflection_node(state: GraphState) -> GraphState:
                 "instruction": state.request.prompt,
                 "rules_json": rules_json,
                 "validation_errors": validation_errors,
+                "anomalies": anomaly_text,
                 "user_feedback": state.user_feedback or "",
                 "format_instructions": format_instructions,
             }

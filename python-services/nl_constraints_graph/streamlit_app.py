@@ -6,6 +6,8 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
+from llm_router import call_llm
+import traceback
 
 # ---------------------------------------------------------------------
 # Path + imports setup
@@ -17,6 +19,7 @@ if PARENT_DIR not in sys.path:
     sys.path.append(PARENT_DIR)
 
 load_dotenv()
+# (override=True)
 
 from nl_constraints_graph.models import GraphState, NLRequest  # type: ignore
 from nl_constraints_graph.graph_nl_to_yaml import build_graph  # type: ignore
@@ -53,7 +56,7 @@ def init_session_state():
         st.session_state.last_apply_flag = False
 
 
-def run_graph(dataset: str, prompt: str, apply: bool, feedback: str | None):
+def run_graph(dataset: str, prompt: str, apply: bool, feedback: str | None, self_healing: bool):
     """Invoke the LangGraph NL → YAML workflow and return a GraphState."""
     columns = get_dataset_columns(dataset)
     request = NLRequest(dataset=dataset, prompt=prompt, apply=apply)
@@ -61,6 +64,7 @@ def run_graph(dataset: str, prompt: str, apply: bool, feedback: str | None):
         request=request,
         columns=columns,
         user_feedback=feedback,
+        self_healing_enabled=self_healing,
     )
     app = build_graph()
     raw_result = app.invoke(init_state)
@@ -202,11 +206,44 @@ def main():
     st.sidebar.header("Configuration")
 
     dataset = st.sidebar.text_input("Dataset", value="fact_sales")
+    
+    # self healing checkbox (not used in code yet)
+    self_healing = st.sidebar.checkbox("Enable self-healing suggestions", value=True)
+
 
     apply_changes = st.sidebar.checkbox(
         "Apply changes to YAML (not just dry-run)",
         value=False,
     )
+    
+    
+        # --- .env reload + configured models ---
+    if "config" not in st.session_state:
+        st.session_state.config = {
+            "PRIMARY_MODEL": os.getenv("PRIMARY_MODEL", "gpt-4o-mini"),
+            "FALLBACK_MODEL": os.getenv("FALLBACK_MODEL", "gemini-2.0-flash"),
+        }
+
+    if st.sidebar.button("🔄 Reload .env"):
+        # reload .env and override existing env vars
+        load_dotenv(override=True)
+        st.session_state.config["PRIMARY_MODEL"] = os.getenv("PRIMARY_MODEL", "gpt-4o-mini")
+        st.session_state.config["FALLBACK_MODEL"] = os.getenv("FALLBACK_MODEL", "gemini-2.0-flash")
+        st.sidebar.success("Reloaded .env")
+
+    st.sidebar.markdown("**Configured models (from .env):**")
+    st.sidebar.markdown(
+        f"- Primary: `{st.session_state.config['PRIMARY_MODEL']}`  \n"
+        f"- Fallback: `{st.session_state.config['FALLBACK_MODEL']}`"
+    )
+
+    st.sidebar.markdown("---")
+
+    
+    
+    
+    
+    
 
     st.sidebar.markdown("---")
     st.sidebar.markdown(
@@ -266,15 +303,26 @@ def main():
                 st.warning("Please enter an instruction.")
             else:
                 with st.spinner("Running LangGraph NL → YAML workflow..."):
+                    # with st.spinner("Thinking..."):
+                    #     result = call_llm(messages)
+                    #     # Sidebar: show which model actually answered
+                    #     st.sidebar.subheader("⚙️ Model Info")
+                    #     st.sidebar.markdown(
+                    #     f"**Active model:** `{result['model']}`  \n"
+                    #     f"**Provider:** `{result['provider']}`"
+                    #     )
+            
                     try:
                         final_state = run_graph(
                             dataset=dataset,
                             prompt=prompt,
                             apply=apply_changes,
                             feedback=feedback_sidebar or None,
+                            self_healing=self_healing,
                         )
                     except Exception as e:
                         st.error(f"Error running graph: {e}")
+                        st.code("".join(traceback.format_exception(type(e), e, e.__traceback__)))
                         return
 
                 # Save interaction to memory
@@ -310,6 +358,13 @@ def main():
                         st.write(f"- {msg}")
                 else:
                     st.write("(none)")
+                    
+                st.markdown("#### Anomaly Messages")
+                if final_state.anomaly_messages:
+                    for msg in final_state.anomaly_messages:
+                        st.warning(msg)
+                else:
+                    st.write("(none)")
 
                 # Inferred rules table
                 st.markdown("#### Inferred / Refined Rules")
@@ -318,6 +373,23 @@ def main():
                     st.dataframe(df_rules, use_container_width=True)
                 else:
                     st.write("No rules inferred.")
+                    
+                 
+                
+                st.markdown("#### Original Rules (from YAML / previous state)")
+                if getattr(final_state, "rules", None):
+                    df_rules_orig = pd.DataFrame([r.dict() for r in final_state.rules])
+                    st.dataframe(df_rules_orig, use_container_width=True)
+                else:
+                    st.write("No original rules in state.")    
+                    
+                with st.expander("🔍 Debug: Raw GraphState"):
+                    try:
+                        st.json(final_state.model_dump())
+                    except Exception:
+                        st.write(final_state)
+                 
+                    
 
                 # YAML preview
                 st.markdown("#### YAML Preview")
@@ -375,6 +447,7 @@ def main():
                             prompt=st.session_state.last_prompt,
                             apply=apply_changes,
                             feedback=refine_feedback,
+                            self_healing=self_healing,
                         )
                     except Exception as e:
                         st.error(f"Error running refinement: {e}")

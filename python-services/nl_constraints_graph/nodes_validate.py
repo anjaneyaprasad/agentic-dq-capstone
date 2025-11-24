@@ -6,6 +6,10 @@ import os
 import yaml
 
 from .models import GraphState, RuleSpec, RuleType
+from .profiling_utils import load_latest_profile
+from .anomaly_utils import detect_anomalies
+
+
 
 load_dotenv()
 
@@ -122,6 +126,14 @@ def validator_node(state: GraphState) -> GraphState:
     """
     try:
         columns = set(get_dataset_columns(state.request.dataset))
+        # Run anomaly detection based on dq_metrics_all
+        anomalies = detect_anomalies(state.request.dataset)
+        state.anomaly_messages = anomalies
+        profile = load_latest_profile(state.request.dataset)
+
+        if anomalies:
+            # Surface anomalies as validation messages too
+            state.validation_messages.extend(anomalies)
     except Exception as e:
         state.validation_ok = False
         state.validation_messages.append(str(e))
@@ -139,70 +151,109 @@ def validator_node(state: GraphState) -> GraphState:
 
     prompt_lower = state.request.prompt.lower()
     cols_lower = {c.lower() for c in columns}
+    
+    profile = load_latest_profile(state.request.dataset)
 
     for r in state.inferred_rules:
-        # 1) supported type?
-        if r.type not in SUPPORTED_RULE_TYPES:
-            ok = False
-            messages.append(f"Unsupported rule type: {r.type} for column {r.column}")
-            continue
+        
+        #         # Profiling-aware advice
+        # if profile and rule.column in profile:
+        #     col_metrics = profile[rule.column]
 
-        # 2) column existence for column-based rules
-        if r.type not in ("size_greater_than",) and r.column:
-            if r.column not in columns:
+            
+            # 1) supported type?
+            if r.type not in SUPPORTED_RULE_TYPES:
                 ok = False
-                messages.append(
-                    f"Column '{r.column}' does not exist in dataset '{state.request.dataset}'. "
-                    f"Known columns: {sorted(columns)}"
-                )
+                messages.append(f"Unsupported rule type: {r.type} for column {r.column}")
                 continue
 
-        # 3) SPECIAL GUARD: user mentioned 'currency' but dataset has no currency column
-        #    In that case, DO NOT allow a domain rule on some random column.
-        if r.type == "domain" and "currency" in prompt_lower:
-            if "currency" not in cols_lower and r.column.lower() != "currency":
+            # 2) column existence for column-based rules
+            if r.type not in ("size_greater_than",) and r.column:
+                if r.column not in columns:
+                    ok = False
+                    messages.append(
+                        f"Column '{r.column}' does not exist in dataset '{state.request.dataset}'. "
+                        f"Known columns: {sorted(columns)}"
+                    )
+                    continue
+
+            # 3) SPECIAL GUARD: user mentioned 'currency' but dataset has no currency column
+            #    In that case, DO NOT allow a domain rule on some random column.
+            if r.type == "domain" and "currency" in prompt_lower:
+                if "currency" not in cols_lower and r.column.lower() != "currency":
+                    ok = False
+                    messages.append(
+                        "Prompt mentions 'currency', but dataset has no 'currency' column. "
+                        f"Refusing to attach currency-like domain rule to column '{r.column}'."
+                    )
+                    continue
+
+            # 4) domain requires allowed_values
+            if r.type == "domain" and not r.allowed_values:
                 ok = False
                 messages.append(
-                    "Prompt mentions 'currency', but dataset has no 'currency' column. "
-                    f"Refusing to attach currency-like domain rule to column '{r.column}'."
+                    f"Rule 'domain' for column '{r.column}' must have allowed_values"
                 )
-                continue
 
-        # 4) domain requires allowed_values
-        if r.type == "domain" and not r.allowed_values:
-            ok = False
-            messages.append(
-                f"Rule 'domain' for column '{r.column}' must have allowed_values"
-            )
+            # 5) thresholds
+            if r.type in ("completeness_threshold", "size_greater_than"):
+                if r.threshold is None:
+                    ok = False
+                    messages.append(
+                        f"Rule '{r.type}' for column '{r.column}' requires threshold"
+                    )
+                elif r.type == "completeness_threshold" and not (0.0 <= r.threshold <= 1.0):
+                    ok = False
+                    messages.append(
+                        f"completeness_threshold for '{r.column}' must be between 0 and 1; got {r.threshold}"
+                    )
 
-        # 5) thresholds
-        if r.type in ("completeness_threshold", "size_greater_than"):
-            if r.threshold is None:
+            # 6) min/max
+            if r.type == "min_value" and r.min is None:
                 ok = False
                 messages.append(
-                    f"Rule '{r.type}' for column '{r.column}' requires threshold"
+                    f"min_value rule for column '{r.column}' requires 'min'"
                 )
-            elif r.type == "completeness_threshold" and not (0.0 <= r.threshold <= 1.0):
+            if r.type == "max_value" and r.max is None:
                 ok = False
                 messages.append(
-                    f"completeness_threshold for '{r.column}' must be between 0 and 1; got {r.threshold}"
+                    f"max_value rule for column '{r.column}' requires 'max'"
                 )
+                
+                
+            # 7) 🔍 Profiling-aware advice (NEW)
+            if profile and r.column and r.column in profile:
+                col_metrics = profile[r.column]
 
-        # 6) min/max
-        if r.type == "min_value" and r.min is None:
-            ok = False
-            messages.append(
-                f"min_value rule for column '{r.column}' requires 'min'"
-            )
-        if r.type == "max_value" and r.max is None:
-            ok = False
-            messages.append(
-                f"max_value rule for column '{r.column}' requires 'max'"
-            )
+                # a) completeness_threshold vs actual completeness
+                if r.type == "completeness_threshold" and r.threshold is not None:
+                    actual_comp = col_metrics.get("completeness")
+                    if actual_comp is not None and actual_comp < r.threshold:
+                        msg = (
+                            f"Warning: requested completeness {r.threshold} for '{r.column}', "
+                            f"but current data completeness is {actual_comp:.3f}. "
+                            "This may cause many rule failures."
+                        )
+                        messages.append(msg)
+                        # If you want self-healing to kick in:
+                        if state.self_healing_enabled:
+                            ok = False  # force reflection to reconsider
+
+                # b) min_value vs observed min
+                if r.type == "min_value" and r.min is not None:
+                    actual_min = col_metrics.get("min")
+                    if actual_min is not None and actual_min < r.min:
+                        msg = (
+                            f"Warning: min_value rule for '{r.column}' requires >= {r.min}, "
+                            f"but observed min is {actual_min:.3f}."
+                        )
+                        messages.append(msg)
+                        if state.self_healing_enabled:
+                            ok = False
+                
 
     state.validation_ok = ok
     state.validation_messages.extend(messages)
     if ok and not messages:
         state.validation_messages.append("All rules validated successfully.")
     return state
-

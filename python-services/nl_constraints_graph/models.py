@@ -71,7 +71,8 @@ class GraphState(BaseModel):
     validation_messages: List[str] = Field(default_factory=list)
     merged_yaml: Optional[Dict[str, Any]] = None
     yaml_path: Optional[str] = None
-    
+    anomaly_messages: List[str] = []
     user_feedback: Optional[str] = None
     refinement_attempts: int = 0
     max_refinements: int = 2
+    self_healing_enabled: bool = False
