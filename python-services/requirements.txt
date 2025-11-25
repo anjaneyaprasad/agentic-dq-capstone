@@ -4,10 +4,17 @@ langgraph>=0.2.0
 openai>=1.50.0
 langchain-openai
 
+google-generativeai
+
 # Web / API / UI
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 streamlit>=1.39.0
+
+# pytest
+pytest
+pytest-mock
+requests-mock
 
 # Config / modeling
 pydantic>=2.5.0

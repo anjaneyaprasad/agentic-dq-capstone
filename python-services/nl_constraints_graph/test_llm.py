@@ -1,4 +1,4 @@
-from llm_router import call_llm
+from .llm_router import call_llm
 
 prompt = [
     {"role": "system", "content": "You are a helpful AI assistant."},
