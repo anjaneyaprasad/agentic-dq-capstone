@@ -11,9 +11,3 @@ def get_llm():
         temperature=float(os.getenv("LLM_TEMPERATURE", 0)),
         api_key=os.getenv("OPENAI_API_KEY")
     )
-
-
-# from router_llm import RouterLLM
-
-# def get_llm():
-#     return RouterLLM()  # replaces ChatOpenAI

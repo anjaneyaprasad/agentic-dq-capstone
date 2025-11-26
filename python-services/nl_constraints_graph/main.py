@@ -1,6 +1,7 @@
-from start_up import *
-from llm_router import call_llm
 from __future__ import annotations
+from .start_up import *
+from .llm_router import call_llm
+
 import argparse
 import yaml
 
@@ -66,7 +67,7 @@ def main():
         save_interaction(
             dataset=args.dataset,
             prompt=args.prompt,
-            rules=[r.dict() for r in final_state.inferred_rules],
+            rules = [r.model_dump() for r in final_state.inferred_rules],
             messages=final_state.validation_messages,
         )
     except Exception as e:

@@ -1,36 +1,6 @@
 dataset: fact_sales
 constraints:
-- type: completeness
-  column: sale_id
-  level: ERROR
-- type: completeness_threshold
-  column: customer_id
-  threshold: 0.99
-  level: ERROR
-- type: completeness
-  column: product_id
-  level: ERROR
-- type: completeness
-  column: store_id
-  level: ERROR
-- type: non_negative
-  column: total_amount
-  level: ERROR
 - type: min_value
-  column: total_amount
-  min: 0.0
-  level: WARN
-- type: max_value
-  column: total_amount
-  max: 1000000.0
-  level: WARN
-- type: size_greater_than
-  column: ''
-  threshold: 100
-  level: WARN
-- type: unique
-  column: customer_id
-  level: ERROR
-- type: non_negative
   column: amount
   level: ERROR
+  min: 0.01

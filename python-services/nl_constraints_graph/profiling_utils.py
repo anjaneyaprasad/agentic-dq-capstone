@@ -1,6 +1,5 @@
-# python-services/nl_constraints_graph/profiling_utils.py
-
 from __future__ import annotations
+
 import os
 from typing import Dict, Any
 
