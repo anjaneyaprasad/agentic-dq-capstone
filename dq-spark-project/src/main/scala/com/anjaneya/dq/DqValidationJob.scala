@@ -524,6 +524,8 @@ object DqValidationJob {
       .config("spark.sql.shuffle.partitions", "8")
       .getOrCreate()
 
+    spark.conf.set("spark.sql.codegen.wholeStage", "false")
+
     val allDatasets =
       Seq("DIM_CUSTOMERS", "DIM_PRODUCTS", "DIM_STORES", "FACT_SALES")
 

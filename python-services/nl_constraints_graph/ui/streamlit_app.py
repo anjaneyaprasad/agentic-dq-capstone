@@ -20,7 +20,7 @@ if PROJECT_ROOT not in sys.path:
 from nl_constraints_graph.llm.llm_router import call_llm
 from nl_constraints_graph.models import GraphState, NLRequest
 from nl_constraints_graph.graph_nl_to_yaml import build_graph
-from nl_constraints_graph.core.nodes_validate import get_dataset_columns
+from nl_constraints_graph.nodes_validate import get_dataset_columns
 
 from nl_constraints_graph.rules_memory import save_interaction
 from nl_constraints_graph.dq_brain import (
@@ -849,11 +849,11 @@ def main():
                     )
                 else:
                     st.markdown("**Raw profiling metrics (long form)**")
-                    st.dataframe(prof_df, use_container_width=True)
+                    st.dataframe(prof_df, width="stretch") # use_container_width=True)
 
                     pretty = summarize_profiling(prof_df)
                     st.markdown("**Human-readable profiling summary**")
-                    st.dataframe(pretty, use_container_width=True)
+                    st.dataframe(pretty, width="stretch") # use_container_width=True)
             except Exception as e:
                 st.error(f"Error loading profiling metrics: {e}")
                 st.code("".join(traceback.format_exception(type(e), e, e.__traceback__)))
@@ -887,7 +887,7 @@ def main():
                     c4.metric("Rows scanned", int(total_rows))
 
                 st.markdown("**All constraint results**")
-                st.dataframe(verif_df, use_container_width=True)
+                st.dataframe(verif_df, width="stretch") # use_container_width=True)
 
                 st.markdown("**Only failed constraints**")
                 failed_df = verif_df[verif_df["CONSTRAINT_STATUS"] != "Success"].copy()
@@ -904,9 +904,9 @@ def main():
                     ]
                     cols = [c for c in cols if c in failed_df.columns]
                     if cols:
-                        st.dataframe(failed_df[cols], use_container_width=True)
+                        st.dataframe(failed_df[cols], width="stretch") # use_container_width=True)
                     else:
-                        st.dataframe(failed_df, use_container_width=True)
+                        st.dataframe(failed_df, width="stretch") # use_container_width=True)
 
                 # Keep latest run info in session for Bad Rows tab
                 st.session_state["last_verif_run_id"] = run_id
@@ -934,7 +934,7 @@ def main():
                         st.success("No bad rows found for the latest run 🎉")
                     else:
                         # Show a limited sample for usability
-                        st.dataframe(bad_df.head(200), use_container_width=True)
+                        st.dataframe(bad_df.head(200), width="stretch") # use_container_width=True)
                 except Exception as e:
                     st.error(f"Error loading bad rows: {e}")
                     st.code("".join(traceback.format_exception(type(e), e, e.__traceback__)))
@@ -988,7 +988,7 @@ def main():
 
                     # Show per-column metrics
                     st.markdown("**Per-column profiling metrics**")
-                    st.dataframe(summary_df, use_container_width=True)
+                    st.dataframe(summary_df, width="stretch") # use_container_width=True)
 
     # ----------------------------------------------------
     # TAB 6: NL → YAML Agent Graph (LangGraph)

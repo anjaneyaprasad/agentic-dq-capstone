@@ -1,0 +1,6 @@
+dataset: dim_customers
+constraints:
+- type: completeness
+  column: customer_id
+  level: ERROR
+  threshold: 0.9

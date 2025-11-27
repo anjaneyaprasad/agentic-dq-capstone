@@ -309,9 +309,11 @@ def build_dq_brain_prompt(dataset_name: str, profiling_df: pd.DataFrame) -> str:
     """
     ds = dataset_name.upper()
 
-    # Convert profiling metrics to a JSON structure that's easy for the LLM
-    profiling_records = profiling_df.to_dict(orient="records")
-    profiling_json = json.dumps(profiling_records, indent=2)
+    # Build structured payload first (dataset + per-column metrics)
+    payload = build_dq_brain_payload(ds, profiling_df)
+
+    # IMPORTANT: make it JSON-serializable (handles pandas.Timestamp etc.)
+    profiling_json = json.dumps(payload, indent=2, default=str)
 
     return (
         "You are a data quality expert. You will receive profiling information "
@@ -333,6 +335,84 @@ def build_dq_brain_prompt(dataset_name: str, profiling_df: pd.DataFrame) -> str:
         "Now produce the JSON object with a 'rules' array. "
         "Do not include any explanatory text outside the JSON."
     )
+
+
+# def build_dq_brain_prompt(dataset_name: str, profiling_df: pd.DataFrame) -> str:
+#     """
+#     Build the system/user prompt for DQ Brain.
+
+#     tests expect:
+#       - dataset name (e.g. 'FACT_SALES') to appear
+#       - the literal token 'PROFILING_JSON' to appear in the prompt
+#       - a JSON snippet containing: "dataset": "FACT_SALES"
+#     """
+#     ds = dataset_name.upper()
+
+#     # Convert profiling metrics to a JSON structure that's easy for the LLM.
+#     # Tests only care that this JSON has a "dataset" field.
+#     profiling_records = profiling_df.to_dict(orient="records")
+#     payload = {
+#         "dataset": ds,
+#         "profiling": profiling_records,
+#     }
+#     profiling_json = json.dumps(payload, indent=2)
+
+#     return (
+#         "You are a data quality expert. You will receive profiling information "
+#         f"for a single dataset named '{ds}'.\n"
+#         "The profiling information is provided as JSON under the key 'PROFILING_JSON'.\n\n"
+#         "PROFILING_JSON:\n"
+#         f"{profiling_json}\n\n"
+#         "From this profiling, infer a set of candidate data quality rules.\n"
+#         "Return a single JSON object with a top-level field 'rules', which is an array.\n"
+#         "Each rule object should contain:\n"
+#         "- ruleType (e.g. COMPLETENESS, UNIQUENESS, RANGE, PATTERN)\n"
+#         "- column\n"
+#         "- level (e.g. ERROR, WARNING)\n"
+#         "- threshold (for completeness or other ratio-based rules, if applicable)\n"
+#         "- minValue / maxValue (for range rules, if applicable)\n"
+#         "- allowedValues (for domain rules, if any)\n"
+#         "- pattern (for regex-based rules, if any)\n"
+#         "- explanation (short human explanation)\n\n"
+#         "Now produce the JSON object with a 'rules' array. "
+#         "Do not include any explanatory text outside the JSON."
+#     )
+
+
+# def build_dq_brain_prompt(dataset_name: str, profiling_df: pd.DataFrame) -> str:
+#     """
+#     Build the system/user prompt for DQ Brain.
+
+#     tests expect:
+#       - dataset name (e.g. 'FACT_SALES') to appear
+#       - the literal token 'PROFILING_JSON' to appear in the prompt
+#     """
+#     ds = dataset_name.upper()
+
+#     # Convert profiling metrics to a JSON structure that's easy for the LLM
+#     profiling_records = profiling_df.to_dict(orient="records")
+#     profiling_json = json.dumps(profiling_records, indent=2)
+
+#     return (
+#         "You are a data quality expert. You will receive profiling information "
+#         f"for a single dataset named '{ds}'.\n"
+#         "The profiling information is provided as JSON under the key 'PROFILING_JSON'.\n\n"
+#         "PROFILING_JSON:\n"
+#         f"{profiling_json}\n\n"
+#         "From this profiling, infer a set of candidate data quality rules.\n"
+#         "Return a single JSON object with a top-level field 'rules', which is an array.\n"
+#         "Each rule object should contain:\n"
+#         "- ruleType (e.g. COMPLETENESS, UNIQUENESS, RANGE, PATTERN)\n"
+#         "- column\n"
+#         "- level (e.g. ERROR, WARNING)\n"
+#         "- threshold (for completeness or other ratio-based rules, if applicable)\n"
+#         "- minValue / maxValue (for range rules, if applicable)\n"
+#         "- allowedValues (for domain rules, if any)\n"
+#         "- pattern (for regex-based rules, if any)\n"
+#         "- explanation (short natural language justification)\n\n"
+#         "Now produce the JSON object with a 'rules' array. "
+#         "Do not include any explanatory text outside the JSON."
+#     )
 
 
 # def build_dq_brain_prompt(dataset: str, prof_df: pd.DataFrame) -> str:
