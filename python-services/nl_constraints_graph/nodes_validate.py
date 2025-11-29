@@ -20,6 +20,7 @@ Internally, we delegate to Snowflake helpers in
 from __future__ import annotations
 
 from typing import Any, List, Sequence, Tuple
+from difflib import get_close_matches
 
 from nl_constraints_graph.models import GraphState
 from nl_constraints_graph.core.nodes_validate import (
@@ -38,6 +39,7 @@ SUPPORTED_RULE_TYPES: list[str] = [
     "RANGE",
     "PATTERN",
     "REGEX",
+    "DOMAIN",
     "completeness",
     "uniqueness",
     "is_unique",
@@ -46,10 +48,84 @@ SUPPORTED_RULE_TYPES: list[str] = [
     "regex",
 ]
 
+RULE_TYPE_ALIASES = {
+    # LLM-friendly names → internal canonical names
+    "unique": "uniqueness",
+    "uniqueness": "uniqueness",
+    "completeness_threshold": "completeness",
+    "completeness": "completeness",
+    "DOMAIN" : "domain",
+    "domain": "domain",
+}
+
 # -------------------------------------------------------------------
 # Public wrappers over Snowflake helpers
 # -------------------------------------------------------------------
 
+def _append_validation_message(state: GraphState, msg: str) -> None:
+    """
+    Safely append a validation message to the GraphState.
+    Ensures validation_messages is always a list.
+    """
+    msgs = list(getattr(state, "validation_messages", []) or [])
+    msgs.append(msg)
+    state.validation_messages = msgs
+
+
+def resolve_column_name(
+    requested: str,
+    state: GraphState,
+) -> str:
+    """
+    Resolve a user- or LLM-specified column name to an actual dataset column.
+
+    Behavior:
+    - If exact match exists -> return it.
+    - If no match:
+        - If self_healing_enabled is True:
+            - pick closest match and record a healing message.
+        - If self_healing_enabled is False:
+            - record an error message and keep the original name (caller may mark rule ERROR).
+    """
+    requested_upper = (requested or "").upper()
+    cols = [c.upper() for c in (state.columns or [])]
+
+    # 1) exact match
+    if requested_upper in cols:
+        return requested_upper
+
+    # 2) no exact match
+    # If we have no columns at all, just complain.
+    if not cols:
+        _append_validation_message(
+            state,
+            f"Column '{requested}' does not exist for dataset {state.request.dataset}. "
+            f"No columns are registered for this dataset.",
+        )
+        return requested_upper
+    
+    # find closest match (simple fuzzy)
+    closest = get_close_matches(requested_upper, cols, n=1, cutoff=0.6)
+    best = closest[0] if closest else None
+
+    if state.self_healing_enabled and best:
+        _append_validation_message(
+            state,
+            f"Column '{requested}' does not exist in dataset {state.request.dataset}. "
+            f"Using closest match '{best}' (self-healing enabled).",
+        )
+        return best
+
+    # non-self-healing path: do NOT substitute, just complain
+    available = ", ".join(cols)
+    _append_validation_message(
+        state,
+        f"Column '{requested}' does not exist in dataset {state.request.dataset}. "
+        f"Available columns: {available}.",
+    )
+    
+    # Let caller decide how to mark rule (likely STATUS = ERROR)
+    return requested_upper
 
 def list_available_datasets() -> List[str]:
     """Public version used at runtime; tests can monkeypatch if needed."""
@@ -134,11 +210,12 @@ def validate_rules(dataset: str, rules: Sequence[Any]) -> Tuple[bool, List[str]]
         r_type = _extract_rule_type(r)
 
         # Normalize type for comparison
-        r_type_norm = (r_type or "").upper()
+        normalized_type = RULE_TYPE_ALIASES.get(r_type, r_type)
+        r_type_norm = (normalized_type or "").upper()
 
         if not r_type_norm or r_type_norm not in SUPPORTED_RULE_TYPES:
             ok = False
-            messages.append(f"Unsupported rule type: {r_type} for column {col}")
+            messages.append(f"Unsupported rule type: {r_type} (normalized to '{r_type_norm}') for column {col}")
             # continue, but still check columns
 
         if col and col.upper() not in dataset_cols:
@@ -201,6 +278,47 @@ def validator_node(state: GraphState) -> GraphState:
         if hasattr(state, "validation_ok"):
             state.validation_ok = False  # type: ignore[attr-defined]
         return state
+    
+    # ============ NEW: column resolution with self-healing awareness ============
+    # Make sure we have the dataset columns on the state
+    if not getattr(state, "columns", None):
+        try:
+            state.columns = get_dataset_columns(dataset)
+        except Exception:
+            # If this fails, we let validate_rules() below surface the error
+            state.columns = []
+
+    dataset_cols = {c.upper() for c in (state.columns or [])}
+    healing_enabled = bool(getattr(state, "self_healing_enabled", False))
+
+    for r in rules:
+        col = _extract_rule_column(r)
+        if not col:
+            continue
+
+        col_upper = col.upper()
+        if col_upper in dataset_cols:
+            # column is fine, nothing to do
+            continue
+
+        # Column is missing -> delegate to resolver (this will append messages)
+        resolved = resolve_column_name(col, state)
+
+        if healing_enabled and resolved.upper() in dataset_cols:
+            # Self-healing ON: update the rule to use the resolved column
+            if hasattr(r, "column"):
+                setattr(r, "column", resolved)
+            elif hasattr(r, "columnName"):
+                setattr(r, "columnName", resolved)
+        else:
+            # Self-healing OFF (or no good match): keep the original name,
+            # but mark rule as error if possible
+            if hasattr(r, "status"):
+                # do not override an existing non-empty status unless you want to
+                existing = getattr(r, "status", None)
+                if not existing:
+                    setattr(r, "status", "ERROR")
+    # ===========================================================================
 
     # We have some rules -> validate them against dataset metadata
     ok, rule_messages = validate_rules(dataset, rules)
@@ -216,15 +334,13 @@ def validator_node(state: GraphState) -> GraphState:
 
     return state
 
+def node_validate_rules(state: GraphState) -> GraphState:
+    """
+    Backwards-compatible alias for validator_node.
 
+    Older code imports:
+        from nl_constraints_graph.nodes_validate import node_validate_rules
 
-# """
-# Shim module for backwards compatibility.
-
-# The real implementations now live in nl_constraints_graph.core.nodes_validate.
-# This file just re-exports them so imports like
-# `from nl_constraints_graph.nodes_validate import validator_node`
-# keep working.
-# """
-
-# from nl_constraints_graph.core.nodes_validate import *  # noqa: F401,F403
+    Newer tests use validator_node(state).
+    """
+    return validator_node(state)

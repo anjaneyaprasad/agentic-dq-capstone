@@ -1,0 +1,28 @@
+dataset: FACT_SALES
+constraints:
+- type: completeness
+  column: SALE_TS
+  level: ERROR
+- type: unique
+  column: SALE_ID
+  level: ERROR
+- type: completeness
+  column: SALE_ID
+  level: ERROR
+- type: completeness_threshold
+  column: SALE_ID
+  level: WARN
+  threshold: 0.95
+- type: unique
+  column: STORE_ID
+  level: ERROR
+  allowed_values:
+  - '101'
+  - '102'
+  - '103'
+- type: unique
+  column: CUSTOMER_ID
+  level: ERROR
+- type: unique
+  column: STORE_ID
+  level: ERROR

@@ -87,7 +87,8 @@ object DqValidationJob {
       .withColumn("DATASET_NAME", lit(datasetName))
       .withColumn("RULE_ID", lit(rule.ruleId))
       .withColumn("PRIMARY_KEY", col(primaryKeyColumn).cast("string"))
-      .withColumn("ROW_JSON", to_json(struct(dataDf.columns.map(col): _*)))
+      // .withColumn("ROW_JSON", to_json(struct(dataDf.columns.map(col): _*)))
+      .withColumn("ROW_JSON", struct(dataDf.columns.map(col): _*))
       .withColumn("VIOLATION_MSG", lit(s"$colName out of range [$minV, $maxV]"))
       .withColumn("CREATED_AT", current_timestamp())
       .select(
@@ -117,7 +118,8 @@ object DqValidationJob {
       .withColumn("DATASET_NAME", lit(datasetName))
       .withColumn("RULE_ID", lit(rule.ruleId))
       .withColumn("PRIMARY_KEY", col(primaryKeyColumn).cast(StringType))
-      .withColumn("ROW_JSON", to_json(struct(dataDf.columns.map(col): _*)))
+      // .withColumn("ROW_JSON", to_json(struct(dataDf.columns.map(col): _*)))
+      .withColumn("ROW_JSON", struct(dataDf.columns.map(col): _*))
       .withColumn(
         "VIOLATION_MSG",
         lit(s"$colName is NULL (COMPLETENESS breach)")
@@ -156,7 +158,8 @@ object DqValidationJob {
       .withColumn("DATASET_NAME", lit(datasetName))
       .withColumn("RULE_ID", lit(rule.ruleId))
       .withColumn("PRIMARY_KEY", col(primaryKeyColumn).cast(StringType))
-      .withColumn("ROW_JSON", to_json(struct(dataDf.columns.map(col): _*)))
+      // .withColumn("ROW_JSON", to_json(struct(dataDf.columns.map(col): _*)))
+      .withColumn("ROW_JSON", struct(dataDf.columns.map(col): _*))
       .withColumn("VIOLATION_MSG", lit(s"$colName violates UNIQUENESS"))
       .withColumn("CREATED_AT", current_timestamp())
       .select(
@@ -276,12 +279,9 @@ object DqValidationJob {
           ruleType = r.getAs[String]("RULE_TYPE"),
           columnName = Option(r.getAs[String]("COLUMN_NAME")),
           level = Option(r.getAs[String]("LEVEL")),
-          threshold =
-            Option(r.getAs[java.lang.Double]("THRESHOLD")).map(_.toDouble),
-          minValue =
-            Option(r.getAs[java.lang.Double]("MIN_VALUE")).map(_.toDouble),
-          maxValue =
-            Option(r.getAs[java.lang.Double]("MAX_VALUE")).map(_.toDouble),
+          threshold = Option(r.getAs[java.lang.Double]("THRESHOLD")).map(_.toDouble),
+          minValue = Option(r.getAs[java.lang.Double]("MIN_VALUE")).map(_.toDouble),
+          maxValue = Option(r.getAs[java.lang.Double]("MAX_VALUE")).map(_.toDouble),
           allowedValuesJson = Option(r.getAs[String]("ALLOWED_VALUES")),
           paramsJson = Option(r.getAs[String]("PARAMS_JSON"))
         )

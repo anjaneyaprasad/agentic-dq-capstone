@@ -39,3 +39,5 @@ snowflake-connector-python
 snowflake-connector-python[pandas]
 pandas
 
+# MCP server
+mcp[cli]

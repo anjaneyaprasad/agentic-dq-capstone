@@ -34,8 +34,6 @@ from nl_constraints_graph.dq_brain import (
     get_snowflake_connection,
 )
 
-from nl_constraints_graph.mcp_client import run_dq_tool
-
 # ---------------------------------------------------------------------
 # Project paths
 # ---------------------------------------------------------------------
@@ -46,6 +44,19 @@ HTML_BUILDER_DIR = os.path.join(PROJECT_ROOT, "python-services", "html_report_bu
 
 METRICS_DIR = os.path.join(PROJECT_ROOT, "output", "dq_metrics_all")
 VERIF_DIR = os.path.join(PROJECT_ROOT, "output", "dq_verification_all")
+
+
+# How to invoke spark-submit (env overrideable if needed)
+SPARK_SUBMIT = os.getenv("SPARK_SUBMIT", "/opt/spark/bin/spark-submit")
+
+# Location of the pre-built fat JAR
+JAR_PATH = os.path.join(
+    SPARK_PROJECT_DIR,
+    "target",
+    "scala-2.12",
+    "dq-spark-project-assembly-0.1.0-SNAPSHOT.jar",
+)
+
 
 # ------------------ Global DQ Config ------------------ #
 DQ_DB = "DQ_DB"
@@ -102,8 +113,11 @@ def run_graph(dataset: str, prompt: str, apply: bool, feedback: str | None, self
         return raw_result
     return GraphState.model_validate(raw_result)
 
-
-def run_cmd(cmd: list[str], cwd: str | None = None) -> str:
+def run_cmd(
+    cmd: list[str],
+    cwd: str | None = None,
+    timeout: int | None = None,
+) -> str:
     """Run a shell command and capture stdout+stderr as text."""
     result = subprocess.run(
         cmd,
@@ -111,8 +125,10 @@ def run_cmd(cmd: list[str], cwd: str | None = None) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        timeout=timeout,
     )
     return result.stdout
+
 
 def load_latest_verification_run(dataset: str) -> tuple[pd.Timestamp, str, pd.DataFrame]:
     """
@@ -199,7 +215,6 @@ def load_latest_verification_run(dataset: str) -> tuple[pd.Timestamp, str, pd.Da
     finally:
         conn.close()
 
-
 def load_bad_rows_for_run(dataset: str, run_id: str) -> pd.DataFrame:
     """
     Load bad rows for a given run and dataset from DQ_BAD_ROWS.
@@ -228,30 +243,16 @@ def load_bad_rows_for_run(dataset: str, run_id: str) -> pd.DataFrame:
     finally:
         conn.close()
 
-
 def run_spark_jobs(dataset: str) -> str:
     """
     Run ProfilingJob + ValidationJob for a dataset using the same pattern
     as manual spark-submit.
 
-    Steps:
-      1) sbt assembly  -> build fat JAR
-      2) spark-submit  -> ProfilingJob
-      3) spark-submit  -> ValidationJob
+    We assume the fat JAR is already built (no sbt assembly here).
     """
     logs: list[str] = []
 
-    # jar_path = "target/scala-2.12/dq-spark-project-assembly-0.1.0-SNAPSHOT.jar"
-    
-    jar_path = os.path.join(
-    SPARK_PROJECT_DIR,
-    "target/scala-2.12/dq-spark-project-assembly-0.1.0-SNAPSHOT.jar",
-    
-    SPARK_SUBMIT = "/opt/spark/bin/spark-submit"
-)
-
-   
-    TIMEOUT_SEC = 900  # 15 min
+    TIMEOUT_SEC = 900  # 15 minutes
 
     # 2) ProfilingJob
     logs.append(f"\nRunning ProfilingJob for {dataset} via spark-submit...\n")
@@ -265,7 +266,7 @@ def run_spark_jobs(dataset: str) -> str:
                 "com.anjaneya.dq.DqProfilingJob",
                 "--packages",
                 "net.snowflake:spark-snowflake_2.12:2.16.0-spark_3.4",
-                jar_path,
+                JAR_PATH,
                 dataset,
             ],
             cwd=SPARK_PROJECT_DIR,
@@ -285,7 +286,7 @@ def run_spark_jobs(dataset: str) -> str:
                 "com.anjaneya.dq.DqValidationJob",
                 "--packages",
                 "net.snowflake:spark-snowflake_2.12:2.16.0-spark_3.4",
-                jar_path,
+                JAR_PATH,
                 dataset,
             ],
             cwd=SPARK_PROJECT_DIR,
@@ -416,201 +417,6 @@ def call_dq_brain_llm(prompt: str) -> str:
     # If we reach here, we don't know how to extract text
     raise ValueError(f"Unsupported llm_router.call_llm result format: {type(result)} -> {result}")
 
-def render_dq_mcp_dashboard(dataset: str) -> None:
-    """
-    Dashboard that calls the MCP tools instead of going
-    directly to Snowflake/Spark, so we exercise the full MCP path.
-    """
-    st.subheader("🛰️ MCP Quick Check (dq_mcp_server tools)")
-    ds = dataset.upper()
-    st.caption(f"Using MCP tools against dataset `{ds}`")
-
-    col_prof, col_verif = st.columns(2)
-
-    # ---------- Left: Profiling via MCP ----------
-    with col_prof:
-        st.markdown("#### Profiling (dq_latest_profiling)")
-        if st.button("Fetch latest profiling via MCP", key="mcp_prof_btn"):
-            try:
-                prof_result = run_dq_tool("dq_latest_profiling", {"dataset": ds})
-            except Exception as e:
-                st.error(f"Error calling dq_latest_profiling via MCP: {e}")
-            else:
-                summary = (prof_result or {}).get("summary") or []
-                metrics = (prof_result or {}).get("metrics") or []
-
-                if summary:
-                    st.markdown("**Summary (from MCP)**")
-                    df_summary = pd.DataFrame(summary)
-                    df_summary = _convert_epoch_ms_columns(df_summary, ["RUN_TS", "STARTED_AT", "FINISHED_AT"])
-                    st.dataframe(df_summary, width="stretch")
-                else:
-                    st.info("No profiling summary returned by MCP tool.")
-
-                with st.expander("Raw profiling metrics (from MCP)", expanded=False):
-                    if metrics:
-                        df_metrics = pd.DataFrame(metrics)
-                        df_metrics = _convert_epoch_ms_columns(df_metrics, ["RUN_TS", "STARTED_AT", "FINISHED_AT"])
-                        st.dataframe(df_metrics, width="stretch")
-                    else:
-                        st.write("No metrics returned.")
-
-    # ---------- Right: Verification via MCP ----------
-    with col_verif:
-        st.markdown("#### Verification (dq_latest_verification)")
-        if st.button("Fetch latest verification via MCP", key="mcp_verif_btn"):
-            try:
-                verif_result = run_dq_tool("dq_latest_verification", {"dataset": ds})
-            except Exception as e:
-                st.error(f"Error calling dq_latest_verification via MCP: {e}")
-            else:
-                # DEBUG: always show raw payload
-                with st.expander("Raw dq_latest_verification payload (from MCP)", expanded=False):
-                    st.json(verif_result)
-
-                constraints = []
-                bad_rows = []
-                total_rules = None
-                failed_rules = None
-
-                if isinstance(verif_result, dict):
-                    constraints  = verif_result.get("constraints") or verif_result.get("rows") or []
-                    bad_rows     = verif_result.get("bad_rows") or verif_result.get("badRows") or []
-                    total_rules  = verif_result.get("total_rules") or verif_result.get("totalRules")
-                    failed_rules = verif_result.get("failed_rules") or verif_result.get("failedRules")
-                elif isinstance(verif_result, list):
-                    # If server returns plain list of constraints
-                    constraints = verif_result
-
-                st.markdown("**Verification overview (from MCP)**")
-                if total_rules is not None:
-                    passed = None
-                    if failed_rules is not None:
-                        passed = total_rules - failed_rules
-
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Total rules", int(total_rules))
-                    if passed is not None:
-                        c2.metric("Passed rules", int(passed))
-                    if failed_rules is not None:
-                        c3.metric("Failed rules", int(failed_rules))
-
-                if constraints:
-                    st.markdown("**Constraint results (from MCP)**")
-                    df_constraints = pd.DataFrame(constraints)
-                    df_constraints = _convert_epoch_ms_columns(df_constraints, ["STARTED_AT", "FINISHED_AT"])
-                    st.dataframe(df_constraints, width="stretch")
-                else:
-                    st.info("No constraint rows returned by MCP tool.")
-
-                if bad_rows:
-                    st.markdown("**Sample bad rows (from MCP)**")
-                    df_bad = pd.DataFrame(bad_rows).head(200)
-                    df_bad = _convert_epoch_ms_columns(df_bad, ["CREATED_AT"])
-                    st.dataframe(df_bad, width="stretch")
-                else:
-                    st.info("No bad rows returned for this run.")
-
-    # ---------- Pipeline via MCP ----------
-    st.markdown("---")
-    st.markdown("#### Spark DQ Pipeline (dq_run_spark_pipeline)")
-
-    if st.button("Run Spark Profiling + Verification via MCP", key="mcp_run_pipeline_btn"):
-        with st.spinner("Triggering Spark DQ pipeline via MCP..."):
-            try:
-                result = run_dq_tool(
-                    "dq_run_spark_pipeline",
-                    {"dataset": ds, "batch_date": None},
-                )
-                logs = (result or {}).get("logs") or str(result)
-                st.session_state.exec_logs = logs
-                st.success("Spark DQ pipeline completed via MCP.")
-            except Exception as e:
-                st.session_state.exec_logs = f"Error running Spark pipeline via MCP: {e}"
-                st.error("Failed to run Spark pipeline via MCP. Check logs below.")
-
-    # Show whatever logs the MCP server returned
-    st.markdown("**MCP Pipeline Logs**")
-    if st.session_state.exec_logs:
-        st.text_area("MCP logs", value=st.session_state.exec_logs, height=250)
-    else:
-        st.write("No MCP logs yet. Run the pipeline via MCP to see output.")
-        
-        
-    # ---------- NL → Rules Agent via MCP ----------
-    st.markdown("---")
-    st.markdown("#### NL → Rules Agent via MCP")
-
-    nl_prompt = st.text_area(
-        "Instruction (sent to MCP NL → Rules tool)",
-        height=100,
-        placeholder=(
-            "Example: Ensure customer_id is unique and at least 99% complete. "
-            "Store_id should only be 101, 102 and 103."
-        ),
-        key="mcp_nl_prompt",
-    )
-
-    if st.button("Run NL → Rules via MCP", key="mcp_nl_run_btn"):
-        if not nl_prompt.strip():
-            st.warning("Please enter an instruction for the MCP NL → Rules agent.")
-        else:
-            with st.spinner("Calling MCP NL → Rules tool..."):
-                try:
-                    # Adjust tool name / payload to match your dq_mcp_server
-                    nl_result = run_dq_tool(
-                        "dq_nl_rules_agent",
-                        {
-                            "dataset": ds,
-                            "prompt": nl_prompt,
-                            "apply": False,  # or True if you want MCP to persist rules
-                        },
-                    )
-                except Exception as e:
-                    st.error(f"Error calling NL → Rules via MCP: {e}")
-                else:
-                    with st.expander("Raw NL → Rules result (from MCP)", expanded=False):
-                        st.json(nl_result)
-                        
-                    
-                    # If the MCP tool itself returned an error payload, show it and bail out
-                    if isinstance(nl_result, dict) and nl_result.get("error"):
-                        st.error(f"MCP NL → Rules tool error: {nl_result['error']}")
-                        if nl_result.get("traceback"):
-                            with st.expander("Traceback from MCP tool"):
-                                st.code(nl_result["traceback"])
-                        return  # don't try to parse rules/messages below
-
-                    rules = []
-                    messages = []
-
-                    if isinstance(nl_result, dict):
-                        # Try to be flexible with field names
-                        rules = (
-                            nl_result.get("rules")
-                            or nl_result.get("inferred_rules")
-                            or []
-                        )
-                        messages = (
-                            nl_result.get("messages")
-                            or nl_result.get("validation_messages")
-                            or []
-                        )
-
-                    st.markdown("**NL → Rules messages (from MCP)**")
-                    if messages:
-                        for m in messages:
-                            st.write(f"- {m}")
-                    else:
-                        st.write("(no messages returned)")
-
-                    st.markdown("**Inferred rules (from MCP)**")
-                    if rules:
-                        df_rules = pd.DataFrame(rules)
-                        st.dataframe(df_rules, width="stretch")
-                    else:
-                        st.info("No rules returned by MCP NL → Rules tool.")
-
 # ---------------------------------------------------------------------
 # Streamlit app
 # ---------------------------------------------------------------------
@@ -667,7 +473,6 @@ def main():
         tab_dq_brain,
         tab_pipeline,
         tab_report,
-        tab_mcp,
         tab_summary,
         tab_graph,
     ) = st.tabs([
@@ -675,7 +480,6 @@ def main():
         "DQ Brain (Profiling → Rules)",
         "DQ Pipeline & Logs",
         "HTML Report Preview",
-        "MCP Quick Check",
         "Multi-dataset Summary",
         "LangGraph Structure",
     ])
@@ -1059,16 +863,11 @@ def main():
                         st.error(f"Failed to save rules to Snowflake: {e}")
         else:
             st.info("No suggested rules loaded yet. Click the button above to generate them.")
-
+    
     with tab_pipeline:
         st.subheader("5. Execute DQ Pipeline for This Dataset")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            run_spark_btn = st.button("Run Spark Profiling + Verification (local Python)", key="run_spark_local")
-        with col2:
-            run_spark_mcp_btn = st.button("Run Spark Profiling + Verification (via MCP)", key="run_spark_mcp")
-
+        
+        run_spark_btn = st.button("Run Spark Profiling + Verification", key="run_spark_local")
         run_report_btn = st.button("Build HTML Report", key="run_report")
 
         # --- Existing local Python call ---
@@ -1081,22 +880,6 @@ def main():
                 except Exception as e:
                     st.session_state.exec_logs = f"Error running Spark jobs (local): {e}"
                     st.error("Failed to run Spark jobs (local). Check logs below.")
-
-        # --- NEW: MCP-based pipeline trigger ---
-        if run_spark_mcp_btn:
-            with st.spinner("Running Spark DQ jobs via MCP (dq_run_spark_pipeline)..."):
-                try:
-                    result = run_dq_tool(
-                        "dq_run_spark_pipeline",
-                        {"dataset": dataset.upper(), "batch_date": None},
-                    )
-                    # result is {"dataset": ds, "batch_date": batch_date, "logs": logs_str}
-                    logs = (result or {}).get("logs") or str(result)
-                    st.session_state.exec_logs = logs
-                    st.success("Spark jobs completed via MCP.")
-                except Exception as e:
-                    st.session_state.exec_logs = f"Error running Spark jobs via MCP: {e}"
-                    st.error("Failed to run Spark jobs via MCP. Check logs below.")
 
         if run_report_btn:
             with st.spinner("Running HTML report builder..."):
@@ -1117,7 +900,7 @@ def main():
             )
         else:
             st.write("No execution logs yet. Run Spark or HTML jobs to see output.")
-    
+
     # ----------------------------------------------------
     # TAB 4: Latest HTML Report preview
     # ----------------------------------------------------
@@ -1247,9 +1030,6 @@ def main():
                     "Run 'Build HTML Report' from the DQ Pipeline & Logs tab first."
                 )
         
-    with tab_mcp:
-        render_dq_mcp_dashboard(dataset)
-
     # ----------------------------------------------------
     # TAB 5: Compact Multi-dataset Summary (Profiling-based)
     # ----------------------------------------------------

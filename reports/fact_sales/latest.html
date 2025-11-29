@@ -2,58 +2,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>DQ Report – FACT_SALES</title>
+  <meta charset="UTF-8" />
+  <title>Data Quality Report – FACT_SALES</title>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 20px;
-      background: #0f172a;
-      color: #e5e7eb;
+      line-height: 1.5;
     }
-    h1, h2 {
-      color: #f9fafb;
+    h1, h2, h3 {
+      color: #222;
     }
-    .card {
-      background: #111827;
-      border-radius: 12px;
-      padding: 16px 20px;
+    .overview-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
       margin-bottom: 24px;
-      border: 1px solid #1f2937;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+      background: #fafafa;
     }
-    .failed-table {
-      width: 100%;
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid #eee;
+    }
+    .metric-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #666;
+    }
+    .metric-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .dq-table {
       border-collapse: collapse;
-      margin-top: 10px;
+      width: 100%;
+      margin-top: 8px;
     }
-    .failed-table th, .failed-table td {
-      border: 1px solid #374151;
+    .dq-table th, .dq-table td {
+      border: 1px solid #ddd;
       padding: 6px 8px;
       font-size: 13px;
     }
-    .failed-table th {
-      background: #111827;
+    .dq-table th {
+      background: #f3f3f3;
+      text-align: left;
     }
-    .failed-table tr:nth-child(even) {
-      background: #020617;
-    }
-    .failed-table tr:nth-child(odd) {
-      background: #020617;
+    .status-failure {
+      color: #b3261e;
+      font-weight: 600;
     }
   </style>
 </head>
 <body>
+
   <h1>Data Quality Report – FACT_SALES</h1>
 
-  <div class="card">
+  <div class="overview-card">
     <h2>Overview</h2>
-    <p>Dataset: <strong>FACT_SALES</strong><br>Total verification rows: <strong>16</strong><br>Passed rows: <strong>16</strong><br>Failed rows: <strong>0</strong></p>
+    <p><strong>Run timestamp:</strong> 2025-11-29 09:26:00.544285</p>
+    <div class="overview-grid">
+      <div class="metric">
+        <div class="metric-label">Total checks</div>
+        <div class="metric-value">16</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Passed checks</div>
+        <div class="metric-value">16</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Failed checks</div>
+        <div class="metric-value status-failure">0</div>
+      </div>
+      
+        <div class="metric">
+            <div class="metric-label">Rows scanned</div>
+            <div class="metric-value">82</div>
+        </div>
+        
+        <div class="metric">
+            <div class="metric-label">Rows with violations</div>
+            <div class="metric-value status-failure">0</div>
+        </div>
+        
+    </div>
   </div>
 
-    <div class="card">
-    <h2>Failed Constraints</h2>
-    <p>No failed constraints 🎉</p>
-  </div>
+  <h2>Failed Constraints</h2>
+  <p>No failed constraints 🎉</p>
+
 </body>
 </html>
+    

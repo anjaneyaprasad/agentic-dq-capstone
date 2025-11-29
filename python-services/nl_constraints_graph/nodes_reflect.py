@@ -8,6 +8,8 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from .llm_client import get_llm
 from .models import GraphState, RuleSpec
+from .nodes_validate import resolve_column_name, get_dataset_columns
+
 
 
 class RulesList(BaseModel):
@@ -93,6 +95,36 @@ def reflection_node(state: GraphState) -> GraphState:
         state.validation_messages.append(f"Reflection failed: {e}")
         # Do not change inferred_rules if reflection fails
         return state
+    
+    # ---- NEW: column resolution with self-healing awareness ----
+    dataset = (state.request.dataset or "").upper()
+
+    if not getattr(state, "columns", None):
+        try:
+            state.columns = get_dataset_columns(dataset)
+        except Exception:
+            state.columns = []
+
+    dataset_cols = {c.upper() for c in (state.columns or [])}
+    healing_enabled = bool(getattr(state, "self_healing_enabled", False))
+
+    for r in new_rules:
+        raw_col = (r.column or "").strip()
+        if not raw_col:
+            continue
+
+        if raw_col.upper() in dataset_cols:
+            continue
+
+        resolved = resolve_column_name(raw_col, state)
+
+        if healing_enabled and resolved.upper() in dataset_cols:
+            r.column = resolved
+        else:
+            if hasattr(r, "level") and not getattr(r, "level", None):
+                r.level = "ERROR"
+    # ------------------------------------------------------------
+
 
     state.inferred_rules = new_rules
     state.refinement_attempts += 1

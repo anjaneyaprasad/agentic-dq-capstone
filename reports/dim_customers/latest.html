@@ -1,163 +1,147 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>DQ Report - dim_customers - 2025-11-19 14:47:16.312666</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { padding: 20px; }
-        .status-pass { color: #198754; font-weight: 600; }
-        .status-fail { color: #dc3545; font-weight: 600; }
-        .badge-metric { font-size: 0.8rem; }
-        .section-title { margin-top: 2rem; margin-bottom: 1rem; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Data Quality Report – DIM_CUSTOMERS</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 20px;
+      line-height: 1.5;
+    }
+    h1, h2, h3 {
+      color: #222;
+    }
+    .overview-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      background: #fafafa;
+    }
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid #eee;
+    }
+    .metric-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #666;
+    }
+    .metric-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .dq-table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .dq-table th, .dq-table td {
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+      font-size: 13px;
+    }
+    .dq-table th {
+      background: #f3f3f3;
+      text-align: left;
+    }
+    .status-failure {
+      color: #b3261e;
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
-<div class="container-fluid">
-    <h2>Data Quality Report</h2>
-    <p class="text-muted">
-        Dataset: <strong>dim_customers</strong><br>
-        Run timestamp: <strong>2025-11-19 14:47:16.312666</strong>
-    </p>
 
-    <hr>
+  <h1>Data Quality Report – DIM_CUSTOMERS</h1>
 
-    <!-- Summary section -->
-    <h4 class="section-title">Summary</h4>
-    <ul>
-        <li>Total constraints evaluated: 5</li>
-        <li>Passed: <span class="status-pass">3</span></li>
-        <li>Failed: <span class="status-fail">2</span></li>
-    </ul>
+  <div class="overview-card">
+    <h2>Overview</h2>
+    <p><strong>Run timestamp:</strong> 2025-11-26 17:01:07.246164</p>
+    <div class="overview-grid">
+      <div class="metric">
+        <div class="metric-label">Total checks</div>
+        <div class="metric-value">8</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Passed checks</div>
+        <div class="metric-value">4</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Failed checks</div>
+        <div class="metric-value status-failure">4</div>
+      </div>
+      
+        <div class="metric">
+            <div class="metric-label">Rows scanned</div>
+            <div class="metric-value">10000</div>
+        </div>
+        
+        <div class="metric">
+            <div class="metric-label">Rows with violations</div>
+            <div class="metric-value status-failure">0</div>
+        </div>
+        
+    </div>
+  </div>
 
-    <!-- Profiling metrics -->
-    <h4 class="section-title">Profiling Metrics</h4>
-    <table class="table table-sm table-striped table-bordered">
-        <thead class="table-light">
-        <tr>
-            <th>Entity</th>
-            <th>Metric</th>
-            <th>Instance (Column)</th>
-            <th>Value</th>
-        </tr>
-        </thead>
-        <tbody>
-        
-            <tr>
-                <td>Column</td>
-                <td>Completeness</td>
-                <td>country</td>
-                <td>0.98</td>
-            </tr>
-        
-            <tr>
-                <td>Column</td>
-                <td>Completeness</td>
-                <td>customer_id</td>
-                <td>1.0</td>
-            </tr>
-        
-            <tr>
-                <td>Dataset</td>
-                <td>Size</td>
-                <td>*</td>
-                <td>20000.0</td>
-            </tr>
-        
-            <tr>
-                <td>Column</td>
-                <td>ApproxCountDistinct</td>
-                <td>customer_id</td>
-                <td>18595.0</td>
-            </tr>
-        
-            <tr>
-                <td>Column</td>
-                <td>ApproxCountDistinct</td>
-                <td>country</td>
-                <td>6.0</td>
-            </tr>
-        
-        </tbody>
-    </table>
+  <h2>Failed Constraints</h2>
+  <table border="1" class="dataframe dq-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>RULE_TYPE</th>
+      <th>COLUMN_NAME</th>
+      <th>CONSTRAINT_STATUS</th>
+      <th>CONSTRAINT_MESSAGE</th>
+      <th>METRIC_NAME</th>
+      <th>METRIC_VALUE</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>UNKNOWN</td>
+      <td>None</td>
+      <td>Failure</td>
+      <td>Value: 0.972 does not meet the constraint requirement! rule_R_DIM_CUSTOMERS_NAME_COMPLETENESS</td>
+      <td>None</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>UNKNOWN</td>
+      <td>None</td>
+      <td>Failure</td>
+      <td>Value: 0.972 does not meet the constraint requirement! rule_R_DIM_CUSTOMERS_NAME_COMPLETENESS</td>
+      <td>None</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>UNKNOWN</td>
+      <td>None</td>
+      <td>Failure</td>
+      <td>Value: 0.9673 does not meet the constraint requirement! rule_R_DIM_CUSTOMERS_COUNTRY_COMPLETENESS</td>
+      <td>None</td>
+      <td>None</td>
+    </tr>
+    <tr>
+      <td>UNKNOWN</td>
+      <td>None</td>
+      <td>Failure</td>
+      <td>Value: 0.9673 does not meet the constraint requirement! rule_R_DIM_CUSTOMERS_COUNTRY_COMPLETENESS</td>
+      <td>None</td>
+      <td>None</td>
+    </tr>
+  </tbody>
+</table>
 
-    <!-- Constraint results -->
-    <h4 class="section-title">Constraint Results</h4>
-    <table class="table table-sm table-bordered">
-        <thead class="table-light">
-        <tr>
-            <th>Check</th>
-            <th>Level</th>
-            <th>Constraint</th>
-            <th>Status</th>
-            <th>Message</th>
-        </tr>
-        </thead>
-        <tbody>
-        
-            <tr>
-                <td>dim_customers-ERROR-constraints</td>
-                <td>Error</td>
-                <td>CompletenessConstraint(Completeness(customer_id,None,None))</td>
-                <td>
-                    
-                        <span class="status-pass">Success</span>
-                    
-                </td>
-                <td></td>
-            </tr>
-        
-            <tr>
-                <td>dim_customers-ERROR-constraints</td>
-                <td>Error</td>
-                <td>UniquenessConstraint(Uniqueness(List(customer_id),None,None))</td>
-                <td>
-                    
-                        <span class="status-pass">Success</span>
-                    
-                </td>
-                <td></td>
-            </tr>
-        
-            <tr>
-                <td>dim_customers-WARN-constraints</td>
-                <td>Warning</td>
-                <td>CompletenessConstraint(Completeness(customer_name,None,None))</td>
-                <td>
-                    
-                        <span class="status-fail">Failure</span>
-                    
-                </td>
-                <td>Input data does not include column customer_name!</td>
-            </tr>
-        
-            <tr>
-                <td>dim_customers-WARN-constraints</td>
-                <td>Warning</td>
-                <td>CompletenessConstraint(Completeness(country,None,None))</td>
-                <td>
-                    
-                        <span class="status-fail">Failure</span>
-                    
-                </td>
-                <td>Value: 0.98 does not meet the constraint requirement!</td>
-            </tr>
-        
-            <tr>
-                <td>dim_customers-WARN-constraints</td>
-                <td>Warning</td>
-                <td>SizeConstraint(Size(None))</td>
-                <td>
-                    
-                        <span class="status-pass">Success</span>
-                    
-                </td>
-                <td></td>
-            </tr>
-        
-        </tbody>
-    </table>
-
-</div>
 </body>
 </html>
+    

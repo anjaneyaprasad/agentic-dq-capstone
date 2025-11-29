@@ -11,6 +11,8 @@ import com.amazon.deequ.analyzers.Analyzer
 import scala.util.Try
 import scala.util.matching.Regex
 
+import net.snowflake.spark.snowflake.Utils.SNOWFLAKE_SOURCE_NAME
+
 object DqCommon {
 
   private val logger = LoggerFactory.getLogger(getClass.getName)
@@ -24,7 +26,8 @@ object DqCommon {
       "sfPassword" -> sys.env("SNOWFLAKE_PASSWORD"),
       "sfWarehouse" -> sys.env("SNOWFLAKE_WAREHOUSE"),
       "sfDatabase" -> "DQ_DB",
-      "sfSchema" -> "DQ_SCHEMA"
+      "sfSchema" -> "DQ_SCHEMA",
+      "JDBC_QUERY_RESULT_FORMAT" -> "JSON"
     )
     logger.info(
       s"[DqCommon] Using Snowflake options for database=DQ_DB schema=DQ_SCHEMA"
@@ -35,7 +38,7 @@ object DqCommon {
   def readSfTable(spark: SparkSession, dbtable: String): DataFrame = {
     logger.debug(s"[DqCommon] Reading from Snowflake table: $dbtable")
     spark.read
-      .format("snowflake")
+      .format(SNOWFLAKE_SOURCE_NAME)
       .options(sfOptions)
       .option("dbtable", dbtable)
       .load()
@@ -51,7 +54,7 @@ object DqCommon {
       s"[DqCommon] Writing to Snowflake table: $dbtable, mode=$mode, rows=$cnt"
     )
     df.write
-      .format("snowflake")
+      .format(SNOWFLAKE_SOURCE_NAME)
       .options(sfOptions)
       .option("dbtable", dbtable)
       .mode(mode)
@@ -190,28 +193,79 @@ object DqCommon {
         )
         addRange(check, col, rule.minValue, rule.maxValue, constraintName)
 
+      // case "DOMAIN" =>
+      //   val col = colOpt.getOrElse(
+      //     throw new IllegalArgumentException(
+      //       s"DOMAIN rule requires COLUMN_NAME, ruleId=${rule.ruleId}"
+      //     )
+      //   )
+      //   addRange(check, col, rule.minValue, rule.maxValue, constraintName)
+
+      // case "PATTERN" | "REGEX" =>
+      //   val col = colOpt.getOrElse(
+      //     throw new IllegalArgumentException(
+      //       s"PATTERN rule requires COLUMN_NAME, ruleId=${rule.ruleId}"
+      //     )
+      //   )
+
+      //   // params: Option[Map[String, String]]
+      //   val pattern: String =
+      //     rule.params
+      //       .flatMap(_.get("pattern"))
+      //       .getOrElse(".*")
+
+      //   addPattern(check, col, pattern, constraintName)
+
+
+      // case "PATTERN" | "REGEX" =>
+      //   val col = colOpt.getOrElse(
+      //     throw new IllegalArgumentException(
+      //       s"PATTERN rule requires COLUMN_NAME, ruleId=${rule.ruleId}"
+      //     )
+      //   )
+      //   val pattern: String =
+      //     rule.paramsJson
+      //       .flatMap { js =>
+      //         // naive parse of {"pattern":"^ABC.*"} – fine for your own generated JSON
+      //         Try {
+      //           val idx = js.indexOf("pattern")
+      //           if (idx >= 0) {
+      //             val after = js.substring(idx)
+      //             val firstQuote = after.indexOf('"', after.indexOf(':'))
+      //             val secondQuote = after.indexOf('"', firstQuote + 1)
+      //             after.substring(firstQuote + 1, secondQuote)
+      //           } else ".*"
+      //         }.toOption
+      //       }
+      //       .getOrElse(".*")
+      //   addPattern(check, col, pattern, constraintName)
+
       case "PATTERN" | "REGEX" =>
         val col = colOpt.getOrElse(
           throw new IllegalArgumentException(
             s"PATTERN rule requires COLUMN_NAME, ruleId=${rule.ruleId}"
           )
         )
+
+        // paramsJson: Option[String] like {"pattern":"^ABC.*"}
         val pattern: String =
           rule.paramsJson
             .flatMap { js =>
-              // naive parse of {"pattern":"^ABC.*"} – fine for your own generated JSON
+              // naive parse of {"pattern":"^ABC.*"}
               Try {
                 val idx = js.indexOf("pattern")
                 if (idx >= 0) {
-                  val after = js.substring(idx)
-                  val firstQuote = after.indexOf('"', after.indexOf(':'))
+                  val after       = js.substring(idx)
+                  val firstQuote  = after.indexOf('"', after.indexOf(':'))
                   val secondQuote = after.indexOf('"', firstQuote + 1)
                   after.substring(firstQuote + 1, secondQuote)
                 } else ".*"
               }.toOption
             }
             .getOrElse(".*")
+
         addPattern(check, col, pattern, constraintName)
+
 
       case other =>
         logger.warn(

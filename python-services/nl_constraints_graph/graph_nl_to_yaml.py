@@ -1,29 +1,74 @@
-from langgraph.graph import StateGraph, END
+from __future__ import annotations
+
 import os
+from langgraph.graph import StateGraph, END
 
 from .models import GraphState
 from .nodes_intent import intent_node
 from .nodes_validate import validator_node
-from .nodes_yaml import yaml_node
+from .nodes_yaml import yaml_node as finalize_rules_node
 from .nodes_reflect import reflection_node
+from .nodes_dq_pipeline import node_run_dq_pipeline
+
+
+# from langgraph.graph import StateGraph, END
+# import os
+
+# from .models import GraphState
+# from .nodes_intent import intent_node
+# from .nodes_validate import validator_node
+# from .nodes_yaml import yaml_node as finalize_rules_node
+# from .nodes_reflect import reflection_node
+# from nl_constraints_graph.nodes_dq_pipeline import node_run_dq_pipeline
+
+# from langgraph.graph import StateGraph, END
+# from nl_constraints_graph.models import GraphState
+# from nl_constraints_graph.nodes_validate import node_validate_rules
+# from nl_constraints_graph.nodes_generate import node_generate_rules
+# from nl_constraints_graph.nodes_apply import node_apply_rules
+# from nl_constraints_graph.nodes_dq_pipeline import node_run_dq_pipeline
+
+# def build_graph():
+#     graph = StateGraph(GraphState)
+
+#     graph.add_node("generate_rules", node_generate_rules)
+#     graph.add_node("validate_rules", node_validate_rules)
+#     graph.add_node("apply_rules", node_apply_rules)
+#     graph.add_node("run_dq_pipeline", node_run_dq_pipeline)
+
+#     graph.set_entry_point("generate_rules")
+#     graph.add_edge("generate_rules", "validate_rules")
+#     graph.add_edge("validate_rules", "apply_rules")
+
+#     # 🔗 After rules are applied/saved, kick off Spark DQ pipeline via MCP:
+#     graph.add_edge("apply_rules", "run_dq_pipeline")
+#     graph.add_edge("run_dq_pipeline", END)
+
+#     return graph.compile()
+
 
 
 def build_graph():
+    """
+    Build the LangGraph for NL → rules:
+
+      intent → validate → (finalize_rules | reflect → validate → ...)
+    """
     g = StateGraph(GraphState)
 
     g.add_node("intent", intent_node)
     g.add_node("validate", validator_node)
     g.add_node("reflect", reflection_node)
-    g.add_node("yaml", yaml_node)
+    g.add_node("finalize_rules", finalize_rules_node)
 
     g.set_entry_point("intent")
     g.add_edge("intent", "validate")
-
-    # If validation OK → YAML
+    
+    # If validation OK → finalize rules
     # If validation fails → reflection (unless max refinements)
     def route_after_validate(state: GraphState):
         if state.validation_ok:
-            return "yaml"
+            return "finalize_rules"
         if state.refinement_attempts < state.max_refinements:
             return "reflect"
         return END
@@ -32,7 +77,7 @@ def build_graph():
         "validate",
         route_after_validate,
         {
-            "yaml": "yaml",
+            "finalize_rules": "finalize_rules",
             "reflect": "reflect",
             END: END,
         },
@@ -40,7 +85,31 @@ def build_graph():
 
     # After reflection → validate again
     g.add_edge("reflect", "validate")
-    g.add_edge("yaml", END)
+    g.add_edge("finalize_rules", END)
+
+
+    # # If validation OK → YAML
+    # # If validation fails → reflection (unless max refinements)
+    # def route_after_validate(state: GraphState):
+    #     if state.validation_ok:
+    #         return "yaml"
+    #     if state.refinement_attempts < state.max_refinements:
+    #         return "reflect"
+    #     return END
+
+    # g.add_conditional_edges(
+    #     "validate",
+    #     route_after_validate,
+    #     {
+    #         "yaml": "yaml",
+    #         "reflect": "reflect",
+    #         END: END,
+    #     },
+    # )
+
+    # # After reflection → validate again
+    # g.add_edge("reflect", "validate")
+    # g.add_edge("yaml", END)
 
     return g.compile()
 

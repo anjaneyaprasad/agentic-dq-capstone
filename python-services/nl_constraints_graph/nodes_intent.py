@@ -11,6 +11,8 @@ from .llm_client import get_llm
 from .models import GraphState, RuleSpec
 from .rules_memory import load_recent_examples
 from .profiling_utils import load_latest_profile
+from .nodes_validate import resolve_column_name, get_dataset_columns
+
 
 
 class RulesList(BaseModel):
@@ -148,6 +150,43 @@ def intent_node(state: GraphState) -> GraphState:
         state.validation_ok = False
         state.validation_messages.append(f"Intent extraction failed: {e}")
         return state
+    
+    # ---- NEW: column resolution with self-healing awareness ----
+    dataset = (state.request.dataset or "").upper()
+
+    # Make sure we have columns on the state (defensive)
+    if not getattr(state, "columns", None):
+        try:
+            state.columns = get_dataset_columns(dataset)
+        except Exception:
+            state.columns = []
+
+    dataset_cols = {c.upper() for c in (state.columns or [])}
+    healing_enabled = bool(getattr(state, "self_healing_enabled", False))
+
+    for r in rules:
+        raw_col = (r.column or "").strip()
+        if not raw_col:
+            continue
+
+        # If already valid, nothing to do
+        if raw_col.upper() in dataset_cols:
+            continue
+
+        # Let the shared resolver handle messages + suggestion
+        resolved = resolve_column_name(raw_col, state)
+
+        if healing_enabled and resolved.upper() in dataset_cols:
+            # Self-healing ON: actually switch the rule to the resolved column
+            r.column = resolved
+        else:
+            # Self-healing OFF (or no good match):
+            # keep original r.column; resolver already added a message.
+            # Optionally mark the rule as ERROR if your RuleSpec has 'level' or 'status'.
+            if hasattr(r, "level") and not getattr(r, "level", None):
+                r.level = "ERROR"
+    # ------------------------------------------------------------
+
 
     # --- HEURISTIC FIX: domain on currency must use 'currency' column ---
     prompt_lower = state.request.prompt.lower()

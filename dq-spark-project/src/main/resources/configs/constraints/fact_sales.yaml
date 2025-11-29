@@ -4,3 +4,9 @@ constraints:
   column: amount
   level: ERROR
   min: 0.01
+- type: completeness
+  column: SALE_ID
+  level: ERROR
+- type: unique
+  column: SALE_ID
+  level: ERROR

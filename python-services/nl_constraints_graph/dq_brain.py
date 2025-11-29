@@ -8,12 +8,22 @@ import pandas as pd
 import snowflake.connector
 from dotenv import load_dotenv
 
-
 DQ_DB = "DQ_DB"
 DQ_SCHEMA = "DQ_SCHEMA"
 
 load_dotenv()
 
+RULE_TYPE_ALIASES = {
+    "unique": "uniqueness",
+    "uniqueness": "uniqueness",
+    "completeness": "completeness",
+    "completeness_threshold": "completeness",
+    "non_negative": "non_negative",
+    "domain": "domain",
+    "size_greater_than": "size_greater_than",
+    "min_value": "min_value",
+    "max_value": "max_value",
+}
 
 # =========================== Snowflake helpers ===========================
 
@@ -33,7 +43,6 @@ def get_snowflake_connection():
         role=os.getenv("SNOWFLAKE_ROLE"),
         # No database/schema here on purpose
     )
-
 
 def list_profiled_datasets() -> List[str]:
     """
@@ -56,7 +65,6 @@ def list_profiled_datasets() -> List[str]:
         return []
     return df["DATASET_NAME"].tolist()
 
-
 def load_profiling_summary(dataset_name: str) -> pd.DataFrame:
     """
     Convenience wrapper:
@@ -67,8 +75,6 @@ def load_profiling_summary(dataset_name: str) -> pd.DataFrame:
     if df.empty:
         return df
     return summarize_profiling(df)
-
-
 
 def load_active_datasets() -> pd.DataFrame:
     """
@@ -86,11 +92,11 @@ def load_active_datasets() -> pd.DataFrame:
     finally:
         conn.close()
 
-
 def load_latest_profiling(dataset_name: str) -> pd.DataFrame:
     """
     Load the latest profiling snapshot for a dataset from
     DQ_DB.DQ_SCHEMA.DQ_PROFILING_METRICS.
+    Converts RUN_TS (epoch ms) to proper timestamp.
     """
     ds = dataset_name.upper()
 
@@ -135,8 +141,17 @@ def load_latest_profiling(dataset_name: str) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
 
-    return pd.DataFrame(rows, columns=cols)
+    df = pd.DataFrame(rows, columns=cols)
 
+    # --- 🔧 FIX: Convert epoch ms → timestamp ---
+    if "RUN_TS" in df.columns:
+        try:
+            df["RUN_TS"] = pd.to_datetime(df["RUN_TS"], unit="ms")
+        except Exception:
+            # fallback if Snowflake starts returning timestamp type later
+            df["RUN_TS"] = pd.to_datetime(df["RUN_TS"], errors="ignore")
+
+    return df
 
 def _safe_float(x: Any) -> float:
     """Helper: safely cast metric to float, treating None/NaN as 0."""
@@ -150,9 +165,7 @@ def _safe_float(x: Any) -> float:
         return 0.0
     return f
 
-
 # =========================== Core transforms ===========================
-
 
 def metrics_to_json_per_column(metrics_df: pd.DataFrame) -> List[Dict[str, Any]]:
     """
@@ -191,7 +204,6 @@ def metrics_to_json_per_column(metrics_df: pd.DataFrame) -> List[Dict[str, Any]]
         )
     return result
 
-
 def build_dq_brain_payload(dataset_name: str, metrics_df: pd.DataFrame) -> Dict[str, Any]:
     """
     Build a compact payload (Python dict) that can be embedded into prompts or logs.
@@ -202,7 +214,6 @@ def build_dq_brain_payload(dataset_name: str, metrics_df: pd.DataFrame) -> Dict[
         "columns": cols_json,
     }
     return payload
-
 
 def summarize_profiling(metrics_df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -223,7 +234,6 @@ def summarize_profiling(metrics_df: pd.DataFrame) -> pd.DataFrame:
             columns=["column", "inferred_type", "non_null_pct", "approx_distinct", "notes"]
         )
 
-    # First, group metrics by column into {"column": ..., "metrics": {...}} structures
     cols_json = metrics_to_json_per_column(metrics_df)
 
     rows: List[Dict[str, Any]] = []
@@ -336,155 +346,6 @@ def build_dq_brain_prompt(dataset_name: str, profiling_df: pd.DataFrame) -> str:
         "Do not include any explanatory text outside the JSON."
     )
 
-
-# def build_dq_brain_prompt(dataset_name: str, profiling_df: pd.DataFrame) -> str:
-#     """
-#     Build the system/user prompt for DQ Brain.
-
-#     tests expect:
-#       - dataset name (e.g. 'FACT_SALES') to appear
-#       - the literal token 'PROFILING_JSON' to appear in the prompt
-#       - a JSON snippet containing: "dataset": "FACT_SALES"
-#     """
-#     ds = dataset_name.upper()
-
-#     # Convert profiling metrics to a JSON structure that's easy for the LLM.
-#     # Tests only care that this JSON has a "dataset" field.
-#     profiling_records = profiling_df.to_dict(orient="records")
-#     payload = {
-#         "dataset": ds,
-#         "profiling": profiling_records,
-#     }
-#     profiling_json = json.dumps(payload, indent=2)
-
-#     return (
-#         "You are a data quality expert. You will receive profiling information "
-#         f"for a single dataset named '{ds}'.\n"
-#         "The profiling information is provided as JSON under the key 'PROFILING_JSON'.\n\n"
-#         "PROFILING_JSON:\n"
-#         f"{profiling_json}\n\n"
-#         "From this profiling, infer a set of candidate data quality rules.\n"
-#         "Return a single JSON object with a top-level field 'rules', which is an array.\n"
-#         "Each rule object should contain:\n"
-#         "- ruleType (e.g. COMPLETENESS, UNIQUENESS, RANGE, PATTERN)\n"
-#         "- column\n"
-#         "- level (e.g. ERROR, WARNING)\n"
-#         "- threshold (for completeness or other ratio-based rules, if applicable)\n"
-#         "- minValue / maxValue (for range rules, if applicable)\n"
-#         "- allowedValues (for domain rules, if any)\n"
-#         "- pattern (for regex-based rules, if any)\n"
-#         "- explanation (short human explanation)\n\n"
-#         "Now produce the JSON object with a 'rules' array. "
-#         "Do not include any explanatory text outside the JSON."
-#     )
-
-
-# def build_dq_brain_prompt(dataset_name: str, profiling_df: pd.DataFrame) -> str:
-#     """
-#     Build the system/user prompt for DQ Brain.
-
-#     tests expect:
-#       - dataset name (e.g. 'FACT_SALES') to appear
-#       - the literal token 'PROFILING_JSON' to appear in the prompt
-#     """
-#     ds = dataset_name.upper()
-
-#     # Convert profiling metrics to a JSON structure that's easy for the LLM
-#     profiling_records = profiling_df.to_dict(orient="records")
-#     profiling_json = json.dumps(profiling_records, indent=2)
-
-#     return (
-#         "You are a data quality expert. You will receive profiling information "
-#         f"for a single dataset named '{ds}'.\n"
-#         "The profiling information is provided as JSON under the key 'PROFILING_JSON'.\n\n"
-#         "PROFILING_JSON:\n"
-#         f"{profiling_json}\n\n"
-#         "From this profiling, infer a set of candidate data quality rules.\n"
-#         "Return a single JSON object with a top-level field 'rules', which is an array.\n"
-#         "Each rule object should contain:\n"
-#         "- ruleType (e.g. COMPLETENESS, UNIQUENESS, RANGE, PATTERN)\n"
-#         "- column\n"
-#         "- level (e.g. ERROR, WARNING)\n"
-#         "- threshold (for completeness or other ratio-based rules, if applicable)\n"
-#         "- minValue / maxValue (for range rules, if applicable)\n"
-#         "- allowedValues (for domain rules, if any)\n"
-#         "- pattern (for regex-based rules, if any)\n"
-#         "- explanation (short natural language justification)\n\n"
-#         "Now produce the JSON object with a 'rules' array. "
-#         "Do not include any explanatory text outside the JSON."
-#     )
-
-
-# def build_dq_brain_prompt(dataset: str, prof_df: pd.DataFrame) -> str:
-#     """
-#     Build a compact, human-readable prompt for the DQ Brain LLM
-#     from the profiling metrics (long-form dataframe from load_latest_profiling).
-#     """
-#     summary_df = summarize_profiling(prof_df)
-
-#     lines: List[str] = []
-#     lines.append(
-#         f"You are a data quality expert. You will receive profiling information for a single dataset named '{dataset}'."
-#     )
-#     lines.append(
-#         "For each column you will see: inferred type, percentage of non-null values, "
-#         "approximate number of distinct values, and short notes."
-#     )
-#     lines.append(
-#         "Based ONLY on this information, propose a small set of high-value data quality rules "
-#         "(3–10 rules). Focus on completeness, uniqueness, valid numeric ranges, valid domains, "
-#         "and simple patterns (like email format or ID format)."
-#     )
-#     lines.append("")
-#     lines.append("Return your answer strictly as JSON with the following schema:")
-#     lines.append(
-#         """
-# {
-#   "rules": [
-#     {
-#       "ruleType": "COMPLETENESS | UNIQUENESS | RANGE | DOMAIN | PATTERN",
-#       "column": "COLUMN_NAME",
-#       "level": "INFO | WARNING | ERROR",
-#       "threshold": 0.99,          // for completeness / uniqueness
-#       "minValue": null,           // for numeric range rules
-#       "maxValue": null,
-#       "allowedValues": null,      // for domain rules (array of values)
-#       "pattern": null,            // for pattern rules (e.g. regex or description)
-#       "explanation": "Short human explanation of why this rule makes sense"
-#     }
-#   ]
-# }
-#         """.strip()
-#     )
-#     lines.append("")
-#     lines.append(f"Dataset: {dataset}")
-#     lines.append("Columns profiling summary:")
-
-#     for _, r in summary_df.iterrows():
-#         col = r["column"]
-#         t = r["inferred_type"]
-#         nn = r["non_null_pct"]
-#         nd = r["approx_distinct"]
-#         notes = r["notes"]
-
-#         line = f"- {col}: type={t}"
-#         if nn is not None:
-#             line += f", non_null_pct={nn}%"
-#         if nd is not None:
-#             line += f", approx_distinct={nd}"
-#         if notes:
-#             line += f" ({notes})"
-#         lines.append(line)
-
-#     lines.append("")
-#     lines.append(
-#         "Now produce the JSON object with a 'rules' array. "
-#         "Do not include any explanatory text outside the JSON."
-#     )
-
-#     return "\n".join(lines)
-
-
 # =========================== LLM integration ===========================
 
 def _strip_markdown_fences(raw_text: str) -> str:
@@ -551,45 +412,136 @@ def save_rules_to_snowflake(
     """
     Save suggested rules into DQ_DB.DQ_SCHEMA.DQ_RULES.
 
-    tests monkeypatch get_snowflake_connection() to return a FakeConn
-    that has:
-      - cursor()
-      - commit()
-      - close()
-    but the cursor is NOT a context manager, so we must NOT use 'with'.
+    Supports TWO input shapes:
+    1) DQ Brain JSON:
+       {
+         "ruleType", "column", "level",
+         "threshold", "minValue", "maxValue",
+         "allowedValues", "pattern", "explanation", ...
+       }
+
+    2) NL Rules JSON / RuleSpec-style:
+       {
+         "type", "column", "level",
+         "threshold", "min", "max",
+         "allowed_values", ...
+       }
     """
     if not rules:
         return
 
     ds = dataset_name.upper()
+    ruleset_id = f"{ds}__DEFAULT"
+
+    def _to_optional_float(val: Any) -> Optional[float]:
+        """Safe float → None for invalid/NaN/inf."""
+        if val is None:
+            return None
+        try:
+            f = float(val)
+        except Exception:
+            return None
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
+
+    def _safe_json_dump(obj: Any) -> Optional[str]:
+        """Safe JSON string; disallow NaN; on failure → None."""
+        if obj is None:
+            return None
+        try:
+            return json.dumps(obj, allow_nan=False)
+        except Exception:
+            return None
 
     conn = get_snowflake_connection()
     try:
-        cur = conn.cursor()  # NOT used as context manager for test compatibility
+        cur = conn.cursor()  # not context manager (for tests)
 
         for r in rules:
             rule_id = str(uuid.uuid4())
 
-            # tests provide keys: ruleType, column, level, threshold, minValue,
-            # maxValue, allowedValues, pattern, explanation
-            allowed_values_json = None
-            params_json = None
+            # ------------------------------------------------------------------
+            # 1) Normalize rule type from multiple possible keys
+            # ------------------------------------------------------------------
+            rule_type_raw = (
+                r.get("ruleType")
+                or r.get("RULE_TYPE")
+                or r.get("type")
+                or r.get("rule_type")
+                or r.get("type_")
+                or r.get("ruleType")
+            )
 
-            if r.get("allowedValues") is not None:
-                allowed_values_json = json.dumps(r["allowedValues"])
+            if not rule_type_raw:
+                # This is what was failing earlier
+                raise ValueError(f"Rule has no type set: {r}")
 
-            params_payload = {}
-            if r.get("pattern") is not None:
-                params_payload["pattern"] = r["pattern"]
-            if r.get("explanation") is not None:
-                params_payload["explanation"] = r["explanation"]
-            if params_payload:
-                params_json = json.dumps(params_payload)
+            # Apply aliases (unique → uniqueness, etc.) and upper-case for DB
+            normalized = RULE_TYPE_ALIASES.get(str(rule_type_raw), str(rule_type_raw))
+            rule_type_db = normalized.upper()
 
+            # ------------------------------------------------------------------
+            # 2) Other scalar fields: column, level, thresholds, ranges
+            # ------------------------------------------------------------------
+            column_raw = (
+                r.get("column")
+                or r.get("COLUMN_NAME")
+                or r.get("column_name")
+            )
+            level_raw = r.get("level") or r.get("LEVEL")
+
+            column_name = None if column_raw is None else str(column_raw)
+            level = None if level_raw is None else str(level_raw)
+
+            threshold = _to_optional_float(r.get("threshold"))
+
+            # Support both minValue/maxValue and min/max (NL agent)
+            min_value = _to_optional_float(
+                r.get("minValue") or r.get("min") or r.get("MIN_VALUE")
+            )
+            max_value = _to_optional_float(
+                r.get("maxValue") or r.get("max") or r.get("MAX_VALUE")
+            )
+
+            # ------------------------------------------------------------------
+            # 3) Allowed values → JSON for VARIANT
+            # ------------------------------------------------------------------
+            allowed_values_src = (
+                r.get("allowedValues")
+                or r.get("allowed_values")
+                or r.get("ALLOWED_VALUES")
+            )
+            allowed_values_json: Optional[str] = _safe_json_dump(allowed_values_src)
+
+            # ------------------------------------------------------------------
+            # 4) Params JSON: pattern / explanation / created_by
+            # ------------------------------------------------------------------
+            params_payload: Dict[str, Any] = {}
+
+            pattern_val = r.get("pattern") or r.get("PATTERN")
+            if pattern_val is not None:
+                params_payload["pattern"] = pattern_val
+
+            explanation_val = r.get("explanation") or r.get("EXPLANATION")
+            if explanation_val is not None:
+                params_payload["explanation"] = explanation_val
+
+            if created_by:
+                params_payload["created_by"] = created_by
+
+            params_json: Optional[str] = _safe_json_dump(
+                params_payload if params_payload else None
+            )
+
+            # ------------------------------------------------------------------
+            # 5) Insert into DQ_RULES
+            # ------------------------------------------------------------------
             cur.execute(
                 """
                 INSERT INTO DQ_DB.DQ_SCHEMA.DQ_RULES (
                     RULE_ID,
+                    RULESET_ID,
                     DATASET_NAME,
                     RULE_TYPE,
                     COLUMN_NAME,
@@ -597,33 +549,50 @@ def save_rules_to_snowflake(
                     THRESHOLD,
                     MIN_VALUE,
                     MAX_VALUE,
-                    ALLOWED_VALUES_JSON,
-                    PARAMS_JSON,
-                    CREATED_BY
+                    ALLOWED_VALUES,
+                    PARAMS_JSON
                 )
-                VALUES (
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s
-                )
+                SELECT
+                    %s AS RULE_ID,
+                    %s AS RULESET_ID,
+                    %s AS DATASET_NAME,
+                    %s AS RULE_TYPE,
+                    %s AS COLUMN_NAME,
+                    %s AS LEVEL,
+                    %s AS THRESHOLD,
+                    %s AS MIN_VALUE,
+                    %s AS MAX_VALUE,
+                    CASE
+                        WHEN %s IS NULL THEN NULL
+                        ELSE PARSE_JSON(%s)
+                    END AS ALLOWED_VALUES,
+                    CASE
+                        WHEN %s IS NULL THEN NULL
+                        ELSE PARSE_JSON(%s)
+                    END AS PARAMS_JSON
                 """,
                 (
                     rule_id,
+                    ruleset_id,
                     ds,
-                    r.get("ruleType"),
-                    r.get("column"),
-                    r.get("level"),
-                    r.get("threshold"),
-                    r.get("minValue"),
-                    r.get("maxValue"),
-                    allowed_values_json,
-                    params_json,
-                    created_by,
+                    rule_type_db,
+                    column_name,
+                    level,
+                    threshold,
+                    min_value,
+                    max_value,
+                    allowed_values_json,  # for CASE WHEN IS NULL
+                    allowed_values_json,  # for PARSE_JSON(...)
+                    params_json,          # for CASE WHEN IS NULL
+                    params_json,          # for PARSE_JSON(...)
                 ),
             )
 
         conn.commit()
     finally:
         conn.close()
+
+
 
 
 # def save_rules_to_snowflake(
@@ -634,68 +603,148 @@ def save_rules_to_snowflake(
 #     """
 #     Save suggested rules into DQ_DB.DQ_SCHEMA.DQ_RULES.
 
-#     Assumes a table like:
+#     Table:
 
 #       DQ_RULES(
-#         RULE_ID,
-#         DATASET_NAME,
-#         RULE_TYPE,
-#         COLUMN_NAME,
-#         LEVEL,
-#         THRESHOLD,
-#         MIN_VALUE,
-#         MAX_VALUE,
-#         ALLOWED_VALUES_JSON,
-#         PARAMS_JSON,
-#         CREATED_BY,
-#         CREATED_AT
+#         RULE_ID        VARCHAR NOT NULL,
+#         RULESET_ID     VARCHAR NOT NULL,
+#         DATASET_NAME   VARCHAR NOT NULL,
+#         RULE_TYPE      VARCHAR NOT NULL,
+#         COLUMN_NAME    VARCHAR,
+#         LEVEL          VARCHAR,
+#         THRESHOLD      FLOAT,
+#         MIN_VALUE      FLOAT,
+#         MAX_VALUE      FLOAT,
+#         ALLOWED_VALUES VARIANT,
+#         PARAMS_JSON    VARIANT,
+#         CREATED_AT     TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 #       )
+
+#     RULESET_ID is set to f"{DATASET_NAME.upper()}__DEFAULT".
+#     'created_by' is stored inside PARAMS_JSON["created_by"].
 #     """
 #     if not rules:
 #         return
 
 #     ds = dataset_name.upper()
+#     ruleset_id = f"{ds}__DEFAULT"
+
+#     def _to_optional_float(val: Any) -> Optional[float]:
+#         """Safe float → None for invalid/NaN/inf."""
+#         if val is None:
+#             return None
+#         try:
+#             f = float(val)
+#         except Exception:
+#             return None
+#         if math.isnan(f) or math.isinf(f):
+#             return None
+#         return f
+
+#     def _safe_json_dump(obj: Any) -> Optional[str]:
+#         """Safe JSON string; disallow NaN; on failure → None."""
+#         if obj is None:
+#             return None
+#         try:
+#             return json.dumps(obj, allow_nan=False)
+#         except Exception:
+#             return None
 
 #     conn = get_snowflake_connection()
 #     try:
-#         with conn.cursor() as cur:
-#             for r in rules:
-#                 rule_id = str(uuid.uuid4())
+#         cur = conn.cursor()  # not context manager (for tests)
 
-#                 cur.execute(
-#                     """
-#                     INSERT INTO DQ_DB.DQ_SCHEMA.DQ_RULES (
-#                         RULE_ID,
-#                         DATASET_NAME,
-#                         RULE_TYPE,
-#                         COLUMN_NAME,
-#                         LEVEL,
-#                         THRESHOLD,
-#                         MIN_VALUE,
-#                         MAX_VALUE,
-#                         ALLOWED_VALUES_JSON,
-#                         PARAMS_JSON,
-#                         CREATED_BY
-#                     )
-#                     VALUES (
-#                         %s, %s, %s, %s, %s,
-#                         %s, %s, %s, %s, %s, %s
-#                     )
-#                     """,
-#                     (
-#                         rule_id,
-#                         ds,
-#                         r.get("ruleType"),
-#                         r.get("column"),
-#                         r.get("level"),
-#                         r.get("threshold"),
-#                         r.get("minValue"),
-#                         r.get("maxValue"),
-#                         r.get("allowedValuesJson"),
-#                         r.get("paramsJson"),
-#                         created_by,
-#                     ),
+#         for r in rules:
+#             rule_id = str(uuid.uuid4())
+
+#             # ---- Normalize scalar fields ----
+#             rule_type_raw = r.get("ruleType")
+#             column_raw = r.get("column")
+#             level_raw = r.get("level")
+
+#             rule_type = None if rule_type_raw is None else str(rule_type_raw)
+#             column_name = None if column_raw is None else str(column_raw)
+#             level = None if level_raw is None else str(level_raw)
+
+#             threshold = _to_optional_float(r.get("threshold"))
+#             min_value = _to_optional_float(r.get("minValue"))
+#             max_value = _to_optional_float(r.get("maxValue"))
+            
+#             if not rule_type:
+#                 # Fail fast with a clear error instead of sending NULL to Snowflake
+#                 raise ValueError(f"Rule has no type set: {r}")
+
+#             normalized = RULE_TYPE_ALIASES.get(str(rule_type), str(rule_type))
+#             rule_type_db = normalized.upper()    # what goes into RULE_TYPE column
+
+#             # ---- Allowed values → JSON string (for VARIANT) ----
+#             allowed_values_json: Optional[str] = _safe_json_dump(
+#                 r.get("allowedValues")
+#             )
+
+#             # ---- Params JSON: pattern / explanation / created_by ----
+#             params_payload: Dict[str, Any] = {}
+#             if r.get("pattern") is not None:
+#                 params_payload["pattern"] = r["pattern"]
+#             if r.get("explanation") is not None:
+#                 params_payload["explanation"] = r["explanation"]
+#             if created_by:
+#                 params_payload["created_by"] = created_by
+
+#             params_json: Optional[str] = _safe_json_dump(
+#                 params_payload if params_payload else None
+#             )
+
+#             cur.execute(
+#                 """
+#                 INSERT INTO DQ_DB.DQ_SCHEMA.DQ_RULES (
+#                     RULE_ID,
+#                     RULESET_ID,
+#                     DATASET_NAME,
+#                     RULE_TYPE,
+#                     COLUMN_NAME,
+#                     LEVEL,
+#                     THRESHOLD,
+#                     MIN_VALUE,
+#                     MAX_VALUE,
+#                     ALLOWED_VALUES,
+#                     PARAMS_JSON
 #                 )
+#                 SELECT
+#                     %s AS RULE_ID,
+#                     %s AS RULESET_ID,
+#                     %s AS DATASET_NAME,
+#                     %s AS RULE_TYPE,
+#                     %s AS COLUMN_NAME,
+#                     %s AS LEVEL,
+#                     %s AS THRESHOLD,
+#                     %s AS MIN_VALUE,
+#                     %s AS MAX_VALUE,
+#                     CASE
+#                         WHEN %s IS NULL THEN NULL
+#                         ELSE PARSE_JSON(%s)
+#                     END AS ALLOWED_VALUES,
+#                     CASE
+#                         WHEN %s IS NULL THEN NULL
+#                         ELSE PARSE_JSON(%s)
+#                     END AS PARAMS_JSON
+#                 """,
+#                 (
+#                     rule_id,
+#                     ruleset_id,
+#                     ds,
+#                     rule_type_db,
+#                     column_name,
+#                     level,
+#                     threshold,
+#                     min_value,
+#                     max_value,
+#                     allowed_values_json,  # for CASE WHEN IS NULL
+#                     allowed_values_json,  # for PARSE_JSON(...)
+#                     params_json,          # for CASE WHEN IS NULL
+#                     params_json,          # for PARSE_JSON(...)
+#                 ),
+#             )
 
 #         conn.commit()
 #     finally:
