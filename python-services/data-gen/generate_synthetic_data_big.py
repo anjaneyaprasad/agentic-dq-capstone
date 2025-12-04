@@ -150,7 +150,7 @@ for table in ["DIM_CUSTOMERS", "DIM_PRODUCTS", "DIM_STORES"]:
     records = []
     dq = DQ_RULES["dims"]
 
-    print(f"\n📌 Generating {rows:,} rows for {table}...")
+    print(f"\n Generating {rows:,} rows for {table}...")
 
     for _ in tqdm(range(rows)):
         if table == "DIM_CUSTOMERS":
@@ -191,7 +191,7 @@ rows = CONFIG["FACT_SALES"]["rows"]
 dq = DQ_RULES["fact"]
 records = []
 
-print(f"\n📌 Generating {rows:,} FACT_SALES rows...")
+print(f"\n Generating {rows:,} FACT_SALES rows...")
 
 for _ in tqdm(range(rows)):
     r = gen_fact(customer_ids, product_ids, store_ids)
@@ -224,4 +224,4 @@ batch_insert(TABLES["FACT_SALES"], records)
 cursor.close()
 conn.close()
 
-print("\n🎉 COMPLETED: All records loaded successfully.\n")
+print("\n COMPLETED: All records loaded successfully.\n")

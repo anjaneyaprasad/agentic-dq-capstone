@@ -1,5 +1,3 @@
-# python-services/nl_constraints_graph/llm/llm_router.py
-
 from __future__ import annotations
 
 import os
